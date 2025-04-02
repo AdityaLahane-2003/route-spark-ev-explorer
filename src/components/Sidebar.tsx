@@ -2,7 +2,7 @@
 import React from 'react';
 import LocationSearchInput from './LocationSearchInput';
 import { LocationSuggestion } from '@/utils/api';
-import { Search, ElectricCar } from 'lucide-react';
+import { Search, Battery, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -84,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className="w-full"
           variant="outline"
         >
-          <ElectricCar className="h-5 w-5 mr-2" />
+          <Zap className="h-5 w-5 mr-2" />
           Electric Car
         </Button>
         
