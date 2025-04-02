@@ -71,8 +71,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
     setInputValue(suggestion.name);
     onChange(suggestion.name);
     onSelect(suggestion);
-    // Close the suggestions dropdown immediately
-    setIsOpen(false);
+    setIsOpen(false); // Always close suggestions after selection
   };
 
   return (

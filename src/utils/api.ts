@@ -95,6 +95,24 @@ export const getRoute = async (
   }
 };
 
+// Create a cache for storing stations by route hash
+const stationsCache = new Map<string, EVStation[]>();
+
+// Function to create a route hash
+const createRouteHash = (geometry: any): string => {
+  // Create a simplified hash of the start and end coordinates
+  if (!geometry || !geometry.coordinates || geometry.coordinates.length === 0) {
+    return '';
+  }
+  
+  // Get first and last coordinate
+  const coords = geometry.type === 'LineString' ? geometry.coordinates : geometry.coordinates[0];
+  const start = coords[0];
+  const end = coords[coords.length - 1];
+  
+  return `${start[0].toFixed(4)},${start[1].toFixed(4)}_${end[0].toFixed(4)},${end[1].toFixed(4)}`;
+};
+
 // Function to find EV stations along a route
 export const findEVStationsAlongRoute = async (
   routeGeometry: any, 
@@ -102,8 +120,31 @@ export const findEVStationsAlongRoute = async (
 ): Promise<EVStation[]> => {
   try {
     // In a real app, we would send the route geometry to an API to find EV stations
-    // For demonstration purposes, we'll generate some mock stations along the route
-    return generateMockStations(routeGeometry, radiusKm);
+    // For demonstration purposes, we'll generate some consistent mock stations along the route
+    
+    // Create a hash for the route
+    const routeHash = createRouteHash(routeGeometry);
+    
+    // If we don't have stations for this route yet, generate them
+    if (!stationsCache.has(routeHash)) {
+      const newStations = generateMockStations(routeGeometry, 5); // Generate with max radius
+      stationsCache.set(routeHash, newStations);
+    }
+    
+    // Get all stations for this route
+    const allStations = stationsCache.get(routeHash) || [];
+    
+    // Filter stations based on radius
+    // In a real implementation, we would associate each station with a distance from the route
+    // Here we'll simulate this by using their index as a rough proxy for distance
+    const stationsWithinRadius = allStations.filter((station, index) => {
+      // Assign each station a "virtual distance" based on its index
+      // Every station is spaced roughly 1km apart in our simulation
+      const virtualDistanceFromRoute = (index % 5) + 1; // 1 to 5 km
+      return virtualDistanceFromRoute <= radiusKm;
+    });
+    
+    return stationsWithinRadius;
   } catch (error) {
     console.error('Error finding EV stations:', error);
     return [];
@@ -117,38 +158,62 @@ const generateMockStations = (routeGeometry: any, radiusKm: number): EVStation[]
     ? routeGeometry.coordinates 
     : routeGeometry.coordinates[0];
   
+  if (!coordinates || coordinates.length === 0) {
+    return [];
+  }
+  
   // Take a sample of coordinates to place stations
-  const sampleStep = Math.max(1, Math.floor(coordinates.length / 5));
+  const sampleStep = Math.max(1, Math.floor(coordinates.length / 10));
   const stationPoints = coordinates.filter((_: any, i: number) => i % sampleStep === 0);
   
-  // Generate random stations near these points
-  return stationPoints.map((coord: number[], index: number) => {
+  // Station names
+  const stationNames = [
+    "Fast Charge Hub", "Electro Point", "Green Energy Station", 
+    "PowerUp EV", "Volt Station", "ChargeNow", "EcoCharge", 
+    "Electron Hub", "Drive Electric", "Plug & Go"
+  ];
+  
+  // Generate random stations near these points with realistic variations
+  const stations = stationPoints.map((coord: number[], index: number) => {
+    // Generate a pseudo-random number based on the coordinates
+    const pseudoRandom = (coord[0] * 10000 + coord[1] * 10000) % 1;
+    
     // Add small random offset to make stations appear near route
     // Scale the offset based on radius - larger radius = stations can be further from route
-    const randomOffset = (Math.random() - 0.5) * 0.01 * radiusKm;
+    const offsetMultiplier = (index % 5) + 1; // 1 to 5, simulates distance from route
+    const randomOffset = (pseudoRandom - 0.5) * 0.01 * offsetMultiplier;
+    
+    // Determine status based on a consistent algorithm
+    const statusSeed = (index * pseudoRandom * 100) % 10;
+    const isAvailable = statusSeed > 2; // 80% chance of being available
+    const isBusy = isAvailable && statusSeed > 6; // 40% of available are busy
+    
+    const stationName = stationNames[index % stationNames.length];
     
     return {
-      id: `station-${index}`,
-      name: `EV Station ${index + 1}`,
+      id: `station-${index}-${coord[0].toFixed(4)}-${coord[1].toFixed(4)}`,
+      name: `${stationName} ${index + 1}`,
       location: [
         coord[0] + randomOffset, 
         coord[1] + randomOffset
       ],
-      address: `Near route point ${index + 1}`,
+      address: `Near ${Math.floor(index/2) + 1} Main Street`,
       connectors: [
         {
-          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor(Math.random() * 3)],
-          power: [30, 50, 120, 250][Math.floor(Math.random() * 4)],
+          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor(pseudoRandom * 3)],
+          power: [30, 50, 120, 250][Math.floor(pseudoRandom * 4)],
           available: Math.random() > 0.3
         },
         {
-          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor(Math.random() * 3)],
-          power: [30, 50, 120, 250][Math.floor(Math.random() * 4)],
+          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor((pseudoRandom + 0.33) * 3) % 3],
+          power: [30, 50, 120, 250][Math.floor((pseudoRandom + 0.33) * 4) % 4],
           available: Math.random() > 0.3
         }
       ],
-      isAvailable: Math.random() > 0.2,
-      isBusy: Math.random() > 0.7
+      isAvailable: isAvailable,
+      isBusy: isBusy
     };
   });
+  
+  return stations;
 };
