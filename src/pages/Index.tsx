@@ -45,7 +45,7 @@ const Index = () => {
     
     try {
       const stations = await findEVStationsAlongRoute(routeInfo.geometry, radius);
-      setEvStations(stations);
+      setEVStations(stations);
       setAllStations(stations);
       
       toast({
@@ -75,7 +75,7 @@ const Index = () => {
         return virtualDistanceFromRoute <= searchRadius;
       });
       
-      setEvStations(stationsWithinRadius);
+      setEVStations(stationsWithinRadius);
       
       toast({
         title: `Showing ${stationsWithinRadius.length} EV stations`,
@@ -110,7 +110,7 @@ const Index = () => {
     
     setIsLoading(true);
     // Clear previous stations
-    setEvStations([]);
+    setEVStations([]);
     setAllStations([]);
     
     try {
@@ -136,7 +136,7 @@ const Index = () => {
         
         // Find EV stations
         const stations = await findEVStationsAlongRoute(route.geometry, searchRadius);
-        setEvStations(stations);
+        setEVStations(stations);
         setAllStations(stations);
         
         toast({
