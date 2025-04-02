@@ -29,32 +29,32 @@ const StationDetails: React.FC<StationDetailsProps> = ({ station, onClose }) => 
     }
   };
   
+  const getStatusColor = () => {
+    if (!station.isAvailable) {
+      return "bg-red-50 text-red-800 border-red-200";
+    } else if (station.isBusy) {
+      return "bg-yellow-50 text-yellow-800 border-yellow-200";
+    } else {
+      return "bg-green-50 text-green-800 border-green-200";
+    }
+  };
+  
   return (
-    <div className="bg-white rounded-lg shadow-lg p-4 max-w-md">
-      <div className="flex justify-between items-start">
-        <h3 className="text-lg font-semibold">{station.name}</h3>
-        <button
-          onClick={onClose}
-          className="text-gray-500 hover:text-gray-700"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+    <div className="py-2">
+      <div className="text-sm text-gray-600">{station.address}</div>
       
-      <div className="text-sm text-gray-600 mt-1">{station.address}</div>
-      
-      <div className="flex items-center mt-3">
+      <div className={`flex items-center mt-4 px-3 py-2 rounded-md border ${getStatusColor()}`}>
         {getStatusIcon()}
-        <span className="ml-2">{getStatusText()}</span>
+        <span className="ml-2 font-medium">{getStatusText()}</span>
       </div>
       
       <div className="mt-4">
-        <h4 className="font-medium mb-2">Connectors</h4>
+        <h4 className="font-medium mb-2">Charging Connectors</h4>
         <div className="space-y-2">
           {station.connectors.map((connector, index) => (
             <div 
               key={index}
-              className="border rounded p-2 flex justify-between items-center"
+              className="border rounded p-3 flex justify-between items-center"
             >
               <div>
                 <div className="font-medium">{connector.type}</div>

@@ -4,7 +4,12 @@ import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/Sidebar';
 import MapComponent from '@/components/Map';
 import StationDetails from '@/components/StationDetails';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { 
+  ResizablePanelGroup, 
+  ResizablePanel, 
+  ResizableHandle 
+} from '@/components/ui/resizable';
 import { getRoute, findEVStationsAlongRoute, LocationSuggestion, EVStation } from '@/utils/api';
 import { X } from 'lucide-react';
 
@@ -23,6 +28,7 @@ const Index = () => {
     duration: number;
   } | null>(null);
   const [evStations, setEVStations] = useState<EVStation[]>([]);
+  const [allStationsMap, setAllStationsMap] = useState<Map<string, EVStation>>(new Map());
   const [selectedStation, setSelectedStation] = useState<EVStation | null>(null);
   
   const handleStartLocationSelect = (location: LocationSuggestion) => {
@@ -39,10 +45,23 @@ const Index = () => {
     
     try {
       const stations = await findEVStationsAlongRoute(routeInfo.geometry, radius);
-      setEVStations(stations);
+      
+      // Update all stations map for cumulative tracking
+      const newStationsMap = new Map(allStationsMap);
+      stations.forEach(station => {
+        if (!newStationsMap.has(station.id)) {
+          newStationsMap.set(station.id, station);
+        }
+      });
+      
+      setAllStationsMap(newStationsMap);
+      
+      // Get all stations that are within the current radius
+      const stationsToShow = Array.from(newStationsMap.values());
+      setEVStations(stationsToShow);
       
       toast({
-        title: `Found ${stations.length} EV stations`,
+        title: `Found ${stationsToShow.length} EV stations`,
         description: `Within ${radius} km radius of your route.`,
         action: (
           <button onClick={() => toast({ open: false })} className="ml-2">
@@ -82,6 +101,9 @@ const Index = () => {
     }
     
     setIsLoading(true);
+    // Clear previous stations
+    setAllStationsMap(new Map());
+    setEVStations([]);
     
     try {
       // Get route
@@ -106,7 +128,15 @@ const Index = () => {
         
         // Find EV stations
         const stations = await findEVStationsAlongRoute(route.geometry, searchRadius);
-        setEVStations(stations);
+        
+        // Store stations in map by ID to avoid duplicates
+        const stationsMap = new Map<string, EVStation>();
+        stations.forEach(station => {
+          stationsMap.set(station.id, station);
+        });
+        
+        setAllStationsMap(stationsMap);
+        setEVStations(Array.from(stationsMap.values()));
         
         toast({
           title: `Found ${stations.length} EV stations`,
@@ -151,8 +181,16 @@ const Index = () => {
   };
   
   return (
-    <div className="flex flex-col md:flex-row h-screen">
-      <div className="md:w-1/3 lg:w-1/4 h-auto md:h-full overflow-auto border-r">
+    <ResizablePanelGroup
+      direction="horizontal"
+      className="h-screen"
+    >
+      <ResizablePanel
+        defaultSize={25}
+        minSize={20}
+        maxSize={50}
+        className="h-full"
+      >
         <Sidebar
           startLocation={startLocation}
           endLocation={endLocation}
@@ -167,9 +205,11 @@ const Index = () => {
           onSearchRadiusChange={handleSearchRadiusChange}
           onSearch={handleSearch}
         />
-      </div>
+      </ResizablePanel>
       
-      <div className="flex-1 h-[60vh] md:h-full">
+      <ResizableHandle withHandle />
+      
+      <ResizablePanel defaultSize={75} className="h-full">
         <MapComponent
           startPoint={startCoords}
           endPoint={endCoords}
@@ -177,10 +217,11 @@ const Index = () => {
           evStations={evStations}
           onStationClick={handleStationClick}
         />
-      </div>
+      </ResizablePanel>
       
       <Dialog open={!!selectedStation} onOpenChange={(open) => !open && setSelectedStation(null)}>
         <DialogContent>
+          <DialogTitle>{selectedStation?.name}</DialogTitle>
           {selectedStation && (
             <StationDetails
               station={selectedStation}
@@ -189,7 +230,7 @@ const Index = () => {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </ResizablePanelGroup>
   );
 };
 

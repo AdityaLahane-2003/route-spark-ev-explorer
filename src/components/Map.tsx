@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import { EVStation } from '@/utils/api';
+import MapLegend from './MapLegend';
 
 // Fix for default marker icon issue in React Leaflet
 // See: https://stackoverflow.com/questions/49441600/react-leaflet-marker-files-not-found
@@ -33,8 +34,27 @@ const endIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-const evStationIcon = new L.Icon({
-  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+// EV station icons based on status
+const availableStationIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const busyStationIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const unavailableStationIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
@@ -70,6 +90,16 @@ const FitBounds: React.FC<FitBoundsProps> = ({ startPoint, endPoint, routePoints
   return null;
 };
 
+// Function to get the right icon based on station status
+const getStationIcon = (station: EVStation) => {
+  if (!station.isAvailable) {
+    return unavailableStationIcon;
+  } else if (station.isBusy) {
+    return busyStationIcon;
+  }
+  return availableStationIcon;
+};
+
 interface MapComponentProps {
   startPoint?: [number, number]; // [lng, lat]
   endPoint?: [number, number]; // [lng, lat]
@@ -100,73 +130,76 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const center: [number, number] = startPoint ? [startPoint[1], startPoint[0]] : defaultCenter;
   
   return (
-    <MapContainer 
-      center={center} 
-      zoom={13} 
-      style={{ height: '100%', width: '100%' }}
-      className="z-0"
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      
-      {startPoint && (
-        <Marker 
-          position={[startPoint[1], startPoint[0]]} 
-          icon={startIcon}
-        >
-          <Popup>Starting Point</Popup>
-        </Marker>
-      )}
-      
-      {endPoint && (
-        <Marker 
-          position={[endPoint[1], endPoint[0]]} 
-          icon={endIcon}
-        >
-          <Popup>Destination</Popup>
-        </Marker>
-      )}
-      
-      {routePoints.length > 0 && (
-        <Polyline 
-          positions={routePoints}
-          color="#2563eb"
-          weight={5}
-          opacity={0.7}
+    <div className="relative h-full w-full">
+      <MapContainer 
+        center={center} 
+        zoom={13} 
+        style={{ height: '100%', width: '100%' }}
+        className="z-0"
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-      )}
-      
-      {evStations.map((station) => (
-        <Marker
-          key={station.id}
-          position={[station.location[1], station.location[0]]}
-          icon={evStationIcon}
-          eventHandlers={{
-            click: () => onStationClick(station)
-          }}
-        >
-          <Popup>
-            <div className="font-medium">{station.name}</div>
-            <div className="text-sm">{station.address}</div>
-            <div className="text-sm mt-1">
-              Status: {station.isAvailable 
-                ? (station.isBusy ? "Busy" : "Available") 
-                : "Unavailable"}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-      
-      {(startPoint || endPoint || routePoints.length > 0) && (
-        <FitBounds 
-          startPoint={startPoint}
-          endPoint={endPoint}
-          routePoints={routeCoordinates}
-        />
-      )}
-    </MapContainer>
+        
+        {startPoint && (
+          <Marker 
+            position={[startPoint[1], startPoint[0]]} 
+            icon={startIcon}
+          >
+            <Popup>Starting Point</Popup>
+          </Marker>
+        )}
+        
+        {endPoint && (
+          <Marker 
+            position={[endPoint[1], endPoint[0]]} 
+            icon={endIcon}
+          >
+            <Popup>Destination</Popup>
+          </Marker>
+        )}
+        
+        {routePoints.length > 0 && (
+          <Polyline 
+            positions={routePoints}
+            color="#2563eb"
+            weight={5}
+            opacity={0.7}
+          />
+        )}
+        
+        {evStations.map((station) => (
+          <Marker
+            key={station.id}
+            position={[station.location[1], station.location[0]]}
+            icon={getStationIcon(station)}
+            eventHandlers={{
+              click: () => onStationClick(station)
+            }}
+          >
+            <Popup>
+              <div className="font-medium">{station.name}</div>
+              <div className="text-sm">{station.address}</div>
+              <div className="text-sm mt-1">
+                Status: {station.isAvailable 
+                  ? (station.isBusy ? "Busy" : "Available") 
+                  : "Unavailable"}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+        
+        {(startPoint || endPoint || routePoints.length > 0) && (
+          <FitBounds 
+            startPoint={startPoint}
+            endPoint={endPoint}
+            routePoints={routeCoordinates}
+          />
+        )}
+      </MapContainer>
+      <MapLegend />
+    </div>
   );
 };
 
