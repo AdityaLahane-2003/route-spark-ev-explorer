@@ -133,8 +133,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="mt-8 border-t pt-4">
           <h3 className="text-xl font-semibold mb-4">Route Information</h3>
           
-          <div className="mb-2">
-            <p className="text-lg">
+          <div className="mb-4">
+            <p className="text-lg font-medium">
               {startLocation} → {endLocation}
             </p>
           </div>
@@ -145,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-lg font-medium">{formatDistance(routeDistance)}</p>
             </div>
             <div>
-              <h4 className="text-gray-600">Estimated Time</h4>
+              <h4 className="text-gray-600">EV Travel Time</h4>
               <p className="text-lg font-medium">{formatDuration(routeDuration)}</p>
             </div>
           </div>

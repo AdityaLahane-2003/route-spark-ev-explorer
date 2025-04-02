@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/Sidebar';
 import MapComponent from '@/components/Map';
@@ -31,6 +31,40 @@ const Index = () => {
   
   const handleEndLocationSelect = (location: LocationSuggestion) => {
     setEndCoords(location.coordinates);
+  };
+  
+  // Function to update EV stations based on the current route and radius
+  const updateEVStations = async (radius: number) => {
+    if (!routeInfo) return;
+    
+    try {
+      const stations = await findEVStationsAlongRoute(routeInfo.geometry, radius);
+      setEVStations(stations);
+      
+      toast({
+        title: `Found ${stations.length} EV stations`,
+        description: `Within ${radius} km radius of your route.`,
+        action: (
+          <button onClick={() => toast({ open: false })} className="ml-2">
+            <X className="h-4 w-4" />
+          </button>
+        )
+      });
+    } catch (error) {
+      console.error("Error finding EV stations:", error);
+    }
+  };
+
+  // Update EV stations when radius changes and there's a route
+  useEffect(() => {
+    if (routeInfo) {
+      updateEVStations(searchRadius);
+    }
+  }, [searchRadius, routeInfo]);
+  
+  // Function to handle search radius change
+  const handleSearchRadiusChange = (radius: number) => {
+    setSearchRadius(radius);
   };
   
   const handleSearch = async () => {
@@ -130,7 +164,7 @@ const Index = () => {
           onEndLocationChange={setEndLocation}
           onStartLocationSelect={handleStartLocationSelect}
           onEndLocationSelect={handleEndLocationSelect}
-          onSearchRadiusChange={setSearchRadius}
+          onSearchRadiusChange={handleSearchRadiusChange}
           onSearch={handleSearch}
         />
       </div>

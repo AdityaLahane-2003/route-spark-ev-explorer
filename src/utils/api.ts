@@ -1,7 +1,7 @@
 
 import axios from 'axios';
 
-const GEOAPIFY_API_KEY = ""; // Add your Geoapify API key here
+const GEOAPIFY_API_KEY = "6a1c2b904e094e519db8c42f74e2e595"; // Using the provided API key
 
 // Interface for location search results
 export interface LocationSuggestion {
@@ -124,6 +124,7 @@ const generateMockStations = (routeGeometry: any, radiusKm: number): EVStation[]
   // Generate random stations near these points
   return stationPoints.map((coord: number[], index: number) => {
     // Add small random offset to make stations appear near route
+    // Scale the offset based on radius - larger radius = stations can be further from route
     const randomOffset = (Math.random() - 0.5) * 0.01 * radiusKm;
     
     return {

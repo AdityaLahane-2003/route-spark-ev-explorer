@@ -97,7 +97,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   
   // Define default center if no points are provided
   const defaultCenter: [number, number] = [20, 0]; // Center of the world map
-  const center = startPoint ? [startPoint[1], startPoint[0]] : defaultCenter;
+  const center: [number, number] = startPoint ? [startPoint[1], startPoint[0]] : defaultCenter;
   
   return (
     <MapContainer 
