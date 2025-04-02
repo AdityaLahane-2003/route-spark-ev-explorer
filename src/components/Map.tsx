@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -130,7 +129,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const center: [number, number] = startPoint ? [startPoint[1], startPoint[0]] : defaultCenter;
   
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden">
       <MapContainer 
         center={center} 
         zoom={13} 

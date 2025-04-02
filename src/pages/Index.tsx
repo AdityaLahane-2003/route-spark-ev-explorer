@@ -184,7 +184,7 @@ const Index = () => {
   return (
     <ResizablePanelGroup
       direction="horizontal"
-      className="h-screen"
+      className="h-screen w-full"
     >
       <ResizablePanel
         defaultSize={25}
@@ -211,13 +211,15 @@ const Index = () => {
       <ResizableHandle withHandle />
       
       <ResizablePanel defaultSize={75} className="h-full">
-        <MapComponent
-          startPoint={startCoords}
-          endPoint={endCoords}
-          routeGeometry={routeInfo?.geometry}
-          evStations={evStations}
-          onStationClick={handleStationClick}
-        />
+        <div className="h-full w-full">
+          <MapComponent
+            startPoint={startCoords}
+            endPoint={endCoords}
+            routeGeometry={routeInfo?.geometry}
+            evStations={evStations}
+            onStationClick={handleStationClick}
+          />
+        </div>
       </ResizablePanel>
       
       <Dialog open={!!selectedStation} onOpenChange={(open) => !open && setSelectedStation(null)}>
