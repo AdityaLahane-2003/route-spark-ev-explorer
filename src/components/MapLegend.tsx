@@ -1,53 +1,40 @@
 
 import React from 'react';
-import { CheckCircle, CircleX, Clock } from 'lucide-react';
 
-const MapLegend = () => {
+interface MapLegendProps {
+  showPOI?: boolean;
+}
+
+const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
   return (
-    <div className="absolute bottom-5 right-5 z-10 bg-white p-3 rounded-md shadow-md">
-      <div className="text-sm font-medium mb-2">EV Station Status</div>
-      <div className="space-y-2">
+    <div className="absolute bottom-4 right-4 bg-white p-3 rounded-md shadow-md z-10">
+      <h4 className="text-sm font-semibold mb-2">Map Legend</h4>
+      <div className="space-y-1 text-xs">
         <div className="flex items-center">
-          <div className="w-5 h-5 mr-2">
-            <img 
-              src="https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png" 
-              alt="Available" 
-              className="h-full"
-            />
-          </div>
-          <span className="text-sm flex items-center">
-            <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
-            Available
-          </span>
+          <div className="w-3 h-3 rounded-full bg-green-600 mr-2"></div>
+          <span>EV Station - Available</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></div>
+          <span>EV Station - Busy</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-red-600 mr-2"></div>
+          <span>EV Station - Unavailable</span>
         </div>
         
-        <div className="flex items-center">
-          <div className="w-5 h-5 mr-2">
-            <img 
-              src="https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png" 
-              alt="In Use" 
-              className="h-full"
-            />
-          </div>
-          <span className="text-sm flex items-center">
-            <Clock className="h-4 w-4 mr-1 text-yellow-500" />
-            In Use
-          </span>
-        </div>
-        
-        <div className="flex items-center">
-          <div className="w-5 h-5 mr-2">
-            <img 
-              src="https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png" 
-              alt="Unavailable" 
-              className="h-full"
-            />
-          </div>
-          <span className="text-sm flex items-center">
-            <CircleX className="h-4 w-4 mr-1 text-red-500" />
-            Unavailable
-          </span>
-        </div>
+        {showPOI && (
+          <>
+            <div className="flex items-center mt-1">
+              <div className="w-3 h-3 rounded-full bg-blue-600 mr-2"></div>
+              <span>Hotel</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 rounded-full bg-violet-600 mr-2"></div>
+              <span>Restaurant</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

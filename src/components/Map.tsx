@@ -1,8 +1,9 @@
+
 import React, { useEffect } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
-import { EVStation } from '@/utils/api';
+import { EVStation, POI } from '@/utils/api';
 import MapLegend from './MapLegend';
 
 // Fix for default marker icon issue in React Leaflet
@@ -61,6 +62,25 @@ const unavailableStationIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+// Icons for hotels and restaurants
+const hotelIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const restaurantIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 // Helper component to fit the map to bounds
 interface FitBoundsProps {
   startPoint?: [number, number]; // [lng, lat]
@@ -99,12 +119,20 @@ const getStationIcon = (station: EVStation) => {
   return availableStationIcon;
 };
 
+// Function to get the right icon for POIs
+const getPOIIcon = (poi: POI) => {
+  return poi.type === 'hotel' ? hotelIcon : restaurantIcon;
+};
+
 interface MapComponentProps {
   startPoint?: [number, number]; // [lng, lat]
   endPoint?: [number, number]; // [lng, lat]
   routeGeometry?: any; // GeoJSON LineString or array of coordinates
   evStations: EVStation[];
+  hotels: POI[];
+  restaurants: POI[];
   onStationClick: (station: EVStation) => void;
+  onPOIClick: (poi: POI) => void;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
@@ -112,7 +140,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
   endPoint,
   routeGeometry,
   evStations,
-  onStationClick
+  hotels,
+  restaurants,
+  onStationClick,
+  onPOIClick
 }) => {
   // Parse route coordinates from geometry
   const routeCoordinates = routeGeometry 
@@ -168,6 +199,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           />
         )}
         
+        {/* Render EV Stations */}
         {evStations.map((station) => (
           <Marker
             key={station.id}
@@ -185,6 +217,55 @@ const MapComponent: React.FC<MapComponentProps> = ({
                   ? (station.isBusy ? "Busy" : "Available") 
                   : "Unavailable"}
               </div>
+              {station.distanceFromRoute && (
+                <div className="text-sm">Distance from route: {station.distanceFromRoute}m</div>
+              )}
+            </Popup>
+          </Marker>
+        ))}
+        
+        {/* Render Hotels */}
+        {hotels.map((hotel) => (
+          <Marker
+            key={hotel.id}
+            position={[hotel.location[1], hotel.location[0]]}
+            icon={hotelIcon}
+            eventHandlers={{
+              click: () => onPOIClick(hotel)
+            }}
+          >
+            <Popup>
+              <div className="font-medium">{hotel.name}</div>
+              <div className="text-sm">{hotel.address}</div>
+              {hotel.rating && (
+                <div className="text-sm">Rating: {hotel.rating}/5</div>
+              )}
+              {hotel.distanceFromRoute && (
+                <div className="text-sm">Distance from route: {hotel.distanceFromRoute}m</div>
+              )}
+            </Popup>
+          </Marker>
+        ))}
+        
+        {/* Render Restaurants */}
+        {restaurants.map((restaurant) => (
+          <Marker
+            key={restaurant.id}
+            position={[restaurant.location[1], restaurant.location[0]]}
+            icon={restaurantIcon}
+            eventHandlers={{
+              click: () => onPOIClick(restaurant)
+            }}
+          >
+            <Popup>
+              <div className="font-medium">{restaurant.name}</div>
+              <div className="text-sm">{restaurant.address}</div>
+              {restaurant.rating && (
+                <div className="text-sm">Rating: {restaurant.rating}/5</div>
+              )}
+              {restaurant.distanceFromRoute && (
+                <div className="text-sm">Distance from route: {restaurant.distanceFromRoute}m</div>
+              )}
             </Popup>
           </Marker>
         ))}
@@ -197,7 +278,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           />
         )}
       </MapContainer>
-      <MapLegend />
+      <MapLegend showPOI={!!(hotels.length || restaurants.length)} />
     </div>
   );
 };
