@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const remainingRange = selectedModel ? Math.round((selectedModel.range * batteryPercentage) / 100) : 0;
   
   return (
-    <div className="bg-white p-4 h-full w-full max-w-md flex flex-col">
+    <div className="bg-white p-4 h-full w-full max-w-md flex flex-col overflow-y-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Go Anywhere</h1>
         <p className="text-gray-600">Find EV charging stations along your route.</p>
@@ -259,7 +259,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
       
       <div className="mt-auto text-xs text-gray-500 pt-4">
-        © {new Date().getFullYear()} EV Route Explorer. Using OpenStreetMap and Geoapify.
+        © {new Date().getFullYear()} EV Route Explorer. Using OpenStreetMap and OpenChargeMap.
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 import axios from 'axios';
 
 const GEOAPIFY_API_KEY = "6a1c2b904e094e519db8c42f74e2e595";
+const OPEN_CHARGE_MAP_API_KEY = "6978e506-213c-41cd-babd-04979455db68";
 
 // Interface for location search results
 export interface LocationSuggestion {
@@ -132,7 +133,7 @@ export const getRoute = async (
   }
 };
 
-// Function to find EV stations along a route
+// Function to find EV stations along a route using OpenChargeMap API
 export const findEVStationsAlongRoute = async (
   routeGeometry: any, 
   radiusKm: number,
@@ -140,7 +141,7 @@ export const findEVStationsAlongRoute = async (
   endPoint: [number, number]
 ): Promise<EVStation[]> => {
   try {
-    // Extract coordinates from route geometry to calculate a central point
+    // Extract coordinates from route geometry to calculate search points
     const coordinates = routeGeometry.type === 'LineString' 
       ? routeGeometry.coordinates 
       : routeGeometry.coordinates[0];
@@ -149,67 +150,131 @@ export const findEVStationsAlongRoute = async (
       return [];
     }
     
-    // Calculate midpoint of route for better search results
-    const midIndex = Math.floor(coordinates.length / 2);
-    const midPoint = coordinates[midIndex];
+    // For a route, we'll query multiple points along the route to ensure coverage
+    // Start with a reasonable number of points (start, middle, end)
+    const searchPoints = [
+      coordinates[0], // Start
+      coordinates[Math.floor(coordinates.length / 2)], // Middle
+      coordinates[coordinates.length - 1] // End
+    ];
+
+    // Add more points for longer routes
+    if (coordinates.length > 20) {
+      // Add quarter point
+      searchPoints.splice(1, 0, coordinates[Math.floor(coordinates.length / 4)]);
+      // Add three-quarter point
+      searchPoints.splice(3, 0, coordinates[Math.floor(3 * coordinates.length / 4)]);
+    }
+
+    // Create promises for all search points
+    const stationPromises = searchPoints.map(point => {
+      return fetchEVStationsNearPoint(point, radiusKm);
+    });
+
+    // Execute all promises
+    const stationResults = await Promise.all(stationPromises);
     
-    // Use Geoapify Places API to find actual EV charging stations
-    const response = await axios.get('https://api.geoapify.com/v2/places', {
-      params: {
-        categories: 'service.vehicle.charging.electric',
-        filter: `circle:${midPoint[0]},${midPoint[1]},${radiusKm * 1000}`, // Convert km to meters
-        limit: 20,
-        apiKey: GEOAPIFY_API_KEY
+    // Flatten and deduplicate stations based on ID
+    const stationsMap = new Map<string, EVStation>();
+    
+    stationResults.flat().forEach(station => {
+      if (!stationsMap.has(station.id)) {
+        // Calculate distance from route (using closest point approximation)
+        const distanceFromRoute = calculateMinDistanceFromRoute(
+          [station.location[0], station.location[1]],
+          coordinates
+        );
+        
+        stationsMap.set(station.id, {
+          ...station,
+          distanceFromRoute: Math.round(distanceFromRoute * 1000) // Convert km to meters
+        });
       }
     });
     
-    if (response.data && response.data.features) {
-      // Transform API response to our EVStation format
-      const stations: EVStation[] = response.data.features.map((feature: any, index: number) => {
-        const props = feature.properties;
-        const coords = feature.geometry.coordinates;
-        
-        // Calculate distance from route (simplified - actually distance from midpoint)
-        const distFromMidpoint = calculateDistance(
-          [midPoint[0], midPoint[1]],
-          [coords[0], coords[1]]
-        );
-        
-        // Generate some realistic connector data
-        const connectors = generateConnectorData(props.name || `Station ${index}`, index);
-        
-        // Determine availability status based on a consistent algorithm using station id
-        const statusSeed = (props.place_id?.charCodeAt(0) || index) % 10;
-        const isAvailable = statusSeed > 2; // 80% chance of being available
-        const isBusy = isAvailable && statusSeed > 6; // 40% of available are busy
-        
-        return {
-          id: props.place_id || `station-${index}`,
-          name: props.name || `EV Charging Station ${index + 1}`,
-          location: [coords[0], coords[1]],
-          address: props.formatted || props.address_line1 || `Near ${props.street || 'Main Street'}`,
-          connectors: connectors,
-          isAvailable: isAvailable,
-          isBusy: isBusy,
-          distanceFromRoute: Math.round(distFromMidpoint * 1000) // Convert km to meters
-        };
-      });
-      
-      // Sort by distance from route
-      return stations.sort((a, b) => (a.distanceFromRoute || 0) - (b.distanceFromRoute || 0));
-    }
-    
-    // Fallback to mock stations if API fails or returns no results
-    console.warn('No EV stations found from API, using mock data');
-    return generateMockStations(routeGeometry, radiusKm);
+    // Convert map back to array and sort by distance from route
+    const stations = Array.from(stationsMap.values());
+    return stations.sort((a, b) => (a.distanceFromRoute || 0) - (b.distanceFromRoute || 0));
   } catch (error) {
     console.error('Error finding EV stations:', error);
-    // Fallback to mock data in case of error
-    return generateMockStations(routeGeometry, radiusKm);
+    return [];
   }
 };
 
-// Function to find hotels and restaurants along a route
+// Helper function to fetch EV stations near a point using OpenChargeMap API
+const fetchEVStationsNearPoint = async (
+  point: number[], 
+  radiusKm: number
+): Promise<EVStation[]> => {
+  try {
+    // OpenChargeMap uses lat,lng format
+    const response = await axios.get('https://api.openchargemap.io/v3/poi', {
+      params: {
+        latitude: point[1],
+        longitude: point[0],
+        distance: radiusKm,
+        distanceunit: 'km',
+        maxresults: 50,
+        compact: true,
+        verbose: false,
+        key: OPEN_CHARGE_MAP_API_KEY
+      }
+    });
+    
+    if (!response.data || !response.data.length) {
+      return [];
+    }
+    
+    // Transform API response to our EVStation format
+    return response.data.map((station: any) => {
+      // Extract connector information
+      const connectors = station.Connections?.map((conn: any) => ({
+        type: conn.ConnectionType?.Title || 'Unknown',
+        power: conn.PowerKW || (conn.Level?.Title === 'Level 2' ? 22 : 50),
+        available: conn.StatusType?.IsOperational !== false
+      })) || [];
+      
+      // Determine availability status based on station status
+      const statusType = station.StatusType?.IsOperational;
+      const isAvailable = statusType !== false; // Consider available unless explicitly marked unavailable
+      
+      // Estimate busyness (this is a simplification, OpenChargeMap doesn't provide real-time busyness)
+      const isBusy = isAvailable && (station.UsageType?.ID === 6 || station.UsageCost === 'High'); // 6 = Private with paid access
+      
+      return {
+        id: `ocm-${station.ID}`,
+        name: station.AddressInfo?.Title || `Charging Station ${station.ID}`,
+        location: [
+          station.AddressInfo?.Longitude || 0,
+          station.AddressInfo?.Latitude || 0
+        ],
+        address: formatStationAddress(station.AddressInfo),
+        connectors: connectors.length ? connectors : [{ type: 'Type 2', power: 22, available: true }],
+        isAvailable,
+        isBusy
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching EV stations from OpenChargeMap:', error);
+    return [];
+  }
+};
+
+// Helper function to format station address
+const formatStationAddress = (addressInfo: any): string => {
+  if (!addressInfo) return 'No address information';
+  
+  const components = [];
+  if (addressInfo.AddressLine1) components.push(addressInfo.AddressLine1);
+  if (addressInfo.Town) components.push(addressInfo.Town);
+  if (addressInfo.StateOrProvince) components.push(addressInfo.StateOrProvince);
+  if (addressInfo.Postcode) components.push(addressInfo.Postcode);
+  if (addressInfo.Country?.Title) components.push(addressInfo.Country.Title);
+  
+  return components.join(', ') || 'No address information';
+};
+
+// Function to find POIs along a route
 export const findPOIsAlongRoute = async (
   routeGeometry: any,
   radiusKm: number,
@@ -248,10 +313,10 @@ export const findPOIsAlongRoute = async (
         const props = feature.properties;
         const coords = feature.geometry.coordinates;
         
-        // Calculate distance from route (simplified - actually distance from midpoint)
-        const distFromMidpoint = calculateDistance(
-          [midPoint[0], midPoint[1]],
-          [coords[0], coords[1]]
+        // Calculate distance from route
+        const distanceFromRoute = calculateMinDistanceFromRoute(
+          [coords[0], coords[1]],
+          coordinates
         );
         
         return {
@@ -261,7 +326,7 @@ export const findPOIsAlongRoute = async (
           address: props.formatted || props.address_line1 || `Near ${props.street || 'Main Street'}`,
           type: poiType,
           rating: props.rating || (Math.floor(Math.random() * 30) + 20) / 10, // Random rating between 2.0 and 5.0
-          distanceFromRoute: Math.round(distFromMidpoint * 1000) // Convert km to meters
+          distanceFromRoute: Math.round(distanceFromRoute * 1000) // Convert km to meters
         };
       });
     }
@@ -271,6 +336,20 @@ export const findPOIsAlongRoute = async (
     console.error(`Error finding ${poiType}s:`, error);
     return [];
   }
+};
+
+// Calculate minimum distance from a point to a route (using closest point approximation)
+const calculateMinDistanceFromRoute = (point: [number, number], routeCoordinates: number[][]): number => {
+  let minDistance = Infinity;
+  
+  for (const coord of routeCoordinates) {
+    const distance = calculateDistance(point, [coord[0], coord[1]]);
+    if (distance < minDistance) {
+      minDistance = distance;
+    }
+  }
+  
+  return minDistance;
 };
 
 // Calculate distance between two points in km (Haversine formula)
@@ -302,100 +381,4 @@ export const calculateChargingTime = (
   
   // Convert to minutes
   return Math.round(hoursNeeded * 60);
-};
-
-// Helper function to generate mock station connectors
-const generateConnectorData = (stationName: string, index: number): Connector[] => {
-  // Use station name and index to generate consistent connector data
-  const seed = stationName.length + index;
-  
-  // Common connector types
-  const connectorTypes = ['CCS', 'CHAdeMO', 'Type 2', 'Type 1', 'GB/T'];
-  // Common power ratings
-  const powerRatings = [11, 22, 50, 120, 150, 250, 350];
-  
-  // Generate 1-3 connectors
-  const numConnectors = (seed % 3) + 1;
-  const connectors: Connector[] = [];
-  
-  for (let i = 0; i < numConnectors; i++) {
-    connectors.push({
-      type: connectorTypes[(seed + i) % connectorTypes.length],
-      power: powerRatings[(seed + i * 2) % powerRatings.length],
-      available: ((seed + i) % 4) > 0 // 75% chance of being available
-    });
-  }
-  
-  return connectors;
-};
-
-// Helper function to generate mock EV stations along a route (fallback)
-const generateMockStations = (routeGeometry: any, radiusKm: number): EVStation[] => {
-  // Extract coordinates from route geometry
-  const coordinates = routeGeometry.type === 'LineString' 
-    ? routeGeometry.coordinates 
-    : routeGeometry.coordinates[0];
-  
-  if (!coordinates || coordinates.length === 0) {
-    return [];
-  }
-  
-  // Take a sample of coordinates to place stations
-  const sampleStep = Math.max(1, Math.floor(coordinates.length / 10));
-  const stationPoints = coordinates.filter((_: any, i: number) => i % sampleStep === 0);
-  
-  // Station names
-  const stationNames = [
-    "Fast Charge Hub", "Electro Point", "Green Energy Station", 
-    "PowerUp EV", "Volt Station", "ChargeNow", "EcoCharge", 
-    "Electron Hub", "Drive Electric", "Plug & Go"
-  ];
-  
-  // Generate stations near these points with realistic variations
-  const stations = stationPoints.map((coord: number[], index: number) => {
-    // Generate a pseudo-random number based on the coordinates
-    const pseudoRandom = (coord[0] * 10000 + coord[1] * 10000) % 1;
-    
-    // Add small random offset to make stations appear near route
-    // Scale the offset based on radius - larger radius = stations can be further from route
-    const offsetMultiplier = (index % 5) + 1; // 1 to 5, simulates distance from route
-    const randomOffset = (pseudoRandom - 0.5) * 0.01 * offsetMultiplier;
-    
-    // Determine status based on a consistent algorithm
-    const statusSeed = (index * pseudoRandom * 100) % 10;
-    const isAvailable = statusSeed > 2; // 80% chance of being available
-    const isBusy = isAvailable && statusSeed > 6; // 40% of available are busy
-    
-    const stationName = stationNames[index % stationNames.length];
-    
-    // Calculate distance from route (simplification)
-    const virtualDistance = (offsetMultiplier * 200) + Math.floor(pseudoRandom * 300); // meters
-    
-    return {
-      id: `station-${index}-${coord[0].toFixed(4)}-${coord[1].toFixed(4)}`,
-      name: `${stationName} ${index + 1}`,
-      location: [
-        coord[0] + randomOffset, 
-        coord[1] + randomOffset
-      ],
-      address: `Near ${Math.floor(index/2) + 1} Main Street`,
-      connectors: [
-        {
-          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor(pseudoRandom * 3)],
-          power: [30, 50, 120, 250][Math.floor(pseudoRandom * 4)],
-          available: Math.random() > 0.3
-        },
-        {
-          type: ['CCS', 'CHAdeMO', 'Type 2'][Math.floor((pseudoRandom + 0.33) * 3) % 3],
-          power: [30, 50, 120, 250][Math.floor((pseudoRandom + 0.33) * 4) % 4],
-          available: Math.random() > 0.3
-        }
-      ],
-      isAvailable: isAvailable,
-      isBusy: isBusy,
-      distanceFromRoute: virtualDistance
-    };
-  });
-  
-  return stations;
 };

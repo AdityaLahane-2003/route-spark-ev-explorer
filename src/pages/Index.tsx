@@ -5,7 +5,11 @@ import Sidebar from '@/components/Sidebar';
 import MapComponent from '@/components/Map';
 import StationDetails from '@/components/StationDetails';
 import POIDetails from '@/components/POIDetails';
+import RouteJourney from '@/components/RouteJourney';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { MapLegend } from '@/components/MapLegend';
 import { 
   ResizablePanelGroup, 
   ResizablePanel, 
@@ -20,7 +24,7 @@ import {
   POI, 
   indianEVModels 
 } from '@/utils/api';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, ChevronRight, ChevronLeft, Map } from 'lucide-react';
 
 const Index = () => {
   const { toast } = useToast();
@@ -37,6 +41,10 @@ const Index = () => {
   const [selectedEVModel, setSelectedEVModel] = useState(indianEVModels[0].id);
   const [showHotels, setShowHotels] = useState(true);
   const [showRestaurants, setShowRestaurants] = useState(true);
+  
+  // UI state
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isJourneyVisible, setIsJourneyVisible] = useState(false);
   
   // Loading and route state
   const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +70,9 @@ const Index = () => {
     hotels: POI[];
     restaurants: POI[];
   } | null>(null);
+  
+  // Get selected EV model object
+  const selectedModelObject = indianEVModels.find(model => model.id === selectedEVModel) || indianEVModels[0];
   
   // Handle location selection
   const handleStartLocationSelect = (location: LocationSuggestion) => {
@@ -146,6 +157,11 @@ const Index = () => {
       setEVStations(stations);
       setHotels(hotelData);
       setRestaurants(restaurantData);
+      
+      // Show journey panel when we have stations
+      if (stations.length > 0) {
+        setIsJourneyVisible(true);
+      }
       
       // Update cache
       setRouteCache({
@@ -290,54 +306,30 @@ const Index = () => {
     setSelectedPOI(poi);
     setSelectedStation(null);
   };
+
+  // For mobile view
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIsMobile);
+    };
+  }, []);
   
   return (
-    <ResizablePanelGroup
-      direction="horizontal"
-      className="h-screen w-full"
-    >
-      <ResizablePanel
-        defaultSize={25}
-        minSize={20}
-        maxSize={50}
-        className="h-full"
-      >
-        <Sidebar
-          startLocation={startLocation}
-          endLocation={endLocation}
-          searchRadius={searchRadius}
-          batteryPercentage={batteryPercentage}
-          selectedEVModel={selectedEVModel}
-          showHotels={showHotels}
-          showRestaurants={showRestaurants}
-          isLoading={isLoading}
-          routeDistance={routeInfo?.distance}
-          routeDuration={routeInfo?.duration}
-          onStartLocationChange={setStartLocation}
-          onEndLocationChange={setEndLocation}
-          onStartLocationSelect={handleStartLocationSelect}
-          onEndLocationSelect={handleEndLocationSelect}
-          onSearchRadiusChange={handleSearchRadiusChange}
-          onBatteryPercentageChange={handleBatteryPercentageChange}
-          onEVModelChange={handleEVModelChange}
-          onShowHotelsChange={handleShowHotelsChange}
-          onShowRestaurantsChange={handleShowRestaurantsChange}
-          onSearch={handleSearch}
-        />
-      </ResizablePanel>
-      
-      <ResizableHandle withHandle />
-      
-      <ResizablePanel defaultSize={75} className="h-full">
-        <div className="h-full w-full">
-          {isLoading ? (
-            <div className="h-full w-full flex items-center justify-center bg-gray-50">
-              <div className="text-center">
-                <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" />
-                <p className="mt-2 text-gray-600">Finding the best route and charging stations...</p>
-              </div>
-            </div>
-          ) : (
+    <div className="h-screen w-full flex flex-col">
+      {isMobile ? (
+        // Mobile layout
+        <div className="h-screen flex flex-col">
+          {/* Map area with sidebar trigger */}
+          <div className="relative flex-grow">
             <MapComponent
               startPoint={startCoords}
               endPoint={endCoords}
@@ -348,9 +340,236 @@ const Index = () => {
               onStationClick={handleStationClick}
               onPOIClick={handlePOIClick}
             />
-          )}
+            <MapLegend showPOI={showHotels || showRestaurants} />
+            
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="absolute top-4 left-4 z-10"
+                >
+                  <Map className="h-4 w-4 mr-2" />
+                  Search
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-full sm:w-[350px] p-0">
+                <div className="h-full overflow-auto">
+                  <Sidebar
+                    startLocation={startLocation}
+                    endLocation={endLocation}
+                    searchRadius={searchRadius}
+                    batteryPercentage={batteryPercentage}
+                    selectedEVModel={selectedEVModel}
+                    showHotels={showHotels}
+                    showRestaurants={showRestaurants}
+                    isLoading={isLoading}
+                    routeDistance={routeInfo?.distance}
+                    routeDuration={routeInfo?.duration}
+                    onStartLocationChange={setStartLocation}
+                    onEndLocationChange={setEndLocation}
+                    onStartLocationSelect={handleStartLocationSelect}
+                    onEndLocationSelect={handleEndLocationSelect}
+                    onSearchRadiusChange={handleSearchRadiusChange}
+                    onBatteryPercentageChange={handleBatteryPercentageChange}
+                    onEVModelChange={handleEVModelChange}
+                    onShowHotelsChange={handleShowHotelsChange}
+                    onShowRestaurantsChange={handleShowRestaurantsChange}
+                    onSearch={handleSearch}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+            
+            {/* Journey view button */}
+            {evStations.length > 0 && (
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button 
+                    className="absolute bottom-4 left-4 z-10"
+                    size="sm"
+                  >
+                    View Journey Plan
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="h-[60vh]">
+                  <RouteJourney
+                    startLocation={startLocation}
+                    endLocation={endLocation}
+                    evStations={evStations}
+                    selectedEVModel={selectedModelObject}
+                    batteryPercentage={batteryPercentage}
+                  />
+                </SheetContent>
+              </Sheet>
+            )}
+            
+            {isLoading && (
+              <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                <div className="bg-white p-5 rounded-lg shadow flex items-center">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
+                  <span className="text-lg">Loading...</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </ResizablePanel>
+      ) : (
+        // Desktop layout with resizable panels
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="h-screen w-full"
+        >
+          <ResizablePanel
+            defaultSize={25}
+            minSize={20}
+            maxSize={50}
+            className="h-full overflow-hidden"
+            collapsible
+            collapsedSize={0}
+            onCollapse={() => setIsSidebarVisible(false)}
+            onExpand={() => setIsSidebarVisible(true)}
+          >
+            <div className={`h-full transition-opacity ${isSidebarVisible ? 'opacity-100' : 'opacity-0'}`}>
+              <Sidebar
+                startLocation={startLocation}
+                endLocation={endLocation}
+                searchRadius={searchRadius}
+                batteryPercentage={batteryPercentage}
+                selectedEVModel={selectedEVModel}
+                showHotels={showHotels}
+                showRestaurants={showRestaurants}
+                isLoading={isLoading}
+                routeDistance={routeInfo?.distance}
+                routeDuration={routeInfo?.duration}
+                onStartLocationChange={setStartLocation}
+                onEndLocationChange={setEndLocation}
+                onStartLocationSelect={handleStartLocationSelect}
+                onEndLocationSelect={handleEndLocationSelect}
+                onSearchRadiusChange={handleSearchRadiusChange}
+                onBatteryPercentageChange={handleBatteryPercentageChange}
+                onEVModelChange={handleEVModelChange}
+                onShowHotelsChange={handleShowHotelsChange}
+                onShowRestaurantsChange={handleShowRestaurantsChange}
+                onSearch={handleSearch}
+              />
+            </div>
+          </ResizablePanel>
+          
+          <ResizableHandle withHandle className="transition-opacity" />
+          
+          <ResizablePanel defaultSize={75} className="h-full">
+            {isJourneyVisible && evStations.length > 0 ? (
+              <ResizablePanelGroup direction="vertical">
+                <ResizablePanel defaultSize={70} minSize={50} className="relative">
+                  <div className="relative h-full w-full">
+                    <MapComponent
+                      startPoint={startCoords}
+                      endPoint={endCoords}
+                      routeGeometry={routeInfo?.geometry}
+                      evStations={evStations}
+                      hotels={showHotels ? hotels : []}
+                      restaurants={showRestaurants ? restaurants : []}
+                      onStationClick={handleStationClick}
+                      onPOIClick={handlePOIClick}
+                    />
+                    <MapLegend showPOI={showHotels || showRestaurants} />
+                    
+                    {/* Sidebar toggle button */}
+                    {!isSidebarVisible && (
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        className="absolute top-4 left-4 z-10"
+                        onClick={() => setIsSidebarVisible(true)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                    
+                    {/* Journey toggle button */}
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      className="absolute bottom-4 right-4 z-10"
+                      onClick={() => setIsJourneyVisible(!isJourneyVisible)}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    
+                    {isLoading && (
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <div className="bg-white p-5 rounded-lg shadow flex items-center">
+                          <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
+                          <span className="text-lg">Loading...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ResizablePanel>
+                
+                <ResizableHandle withHandle />
+                
+                <ResizablePanel defaultSize={30} className="bg-white p-4 overflow-auto">
+                  <RouteJourney
+                    startLocation={startLocation}
+                    endLocation={endLocation}
+                    evStations={evStations}
+                    selectedEVModel={selectedModelObject}
+                    batteryPercentage={batteryPercentage}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <div className="relative h-full w-full">
+                <MapComponent
+                  startPoint={startCoords}
+                  endPoint={endCoords}
+                  routeGeometry={routeInfo?.geometry}
+                  evStations={evStations}
+                  hotels={showHotels ? hotels : []}
+                  restaurants={showRestaurants ? restaurants : []}
+                  onStationClick={handleStationClick}
+                  onPOIClick={handlePOIClick}
+                />
+                <MapLegend showPOI={showHotels || showRestaurants} />
+                
+                {/* Sidebar toggle button */}
+                {!isSidebarVisible && (
+                  <Button 
+                    variant="secondary" 
+                    size="sm"
+                    className="absolute top-4 left-4 z-10"
+                    onClick={() => setIsSidebarVisible(true)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+                
+                {/* Show journey button when we have stations but panel is hidden */}
+                {evStations.length > 0 && !isJourneyVisible && (
+                  <Button 
+                    className="absolute bottom-4 right-4 z-10"
+                    size="sm"
+                    onClick={() => setIsJourneyVisible(true)}
+                  >
+                    View Journey Plan
+                  </Button>
+                )}
+                
+                {isLoading && (
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                    <div className="bg-white p-5 rounded-lg shadow flex items-center">
+                      <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
+                      <span className="text-lg">Loading...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
       
       {/* Dialog for EV Station details */}
       <Dialog open={!!selectedStation} onOpenChange={(open) => !open && setSelectedStation(null)}>
@@ -377,8 +596,24 @@ const Index = () => {
           )}
         </DialogContent>
       </Dialog>
-    </ResizablePanelGroup>
+    </div>
   );
 };
+
+// ChevronDown component for the toggle button
+const ChevronDown = ({ className }: { className?: string }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
 
 export default Index;

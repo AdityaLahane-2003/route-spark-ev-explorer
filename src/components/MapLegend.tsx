@@ -5,7 +5,7 @@ interface MapLegendProps {
   showPOI?: boolean;
 }
 
-const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
+export const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
   return (
     <div className="absolute bottom-4 right-4 bg-white p-3 rounded-md shadow-md z-10">
       <h4 className="text-sm font-semibold mb-2">Map Legend</h4>
