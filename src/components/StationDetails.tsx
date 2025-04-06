@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { EVStation, indianEVModels, calculateChargingTime } from '@/utils/api';
-import { X, CheckCircle, CircleX, Clock, Zap, MapPin } from 'lucide-react';
+import { X, CheckCircle, CircleX, Clock, Zap, MapPin, Battery } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface StationDetailsProps {
@@ -50,14 +50,14 @@ const StationDetails: React.FC<StationDetailsProps> = ({
   // Find the selected EV model
   const model = indianEVModels.find(m => m.id === selectedEVModel);
   
-  const calculateChargeTime = (connector: any) => {
+  const calculateChargeTime = (connector: any, targetPercentage: number = 80) => {
     if (!model) return "N/A";
     
-    // Calculate charging time to 80%
+    // Calculate charging time from current battery to target percentage
     const chargingMinutes = calculateChargingTime(
       model.batteryCapacity, 
       batteryPercentage,
-      80, // Target 80% for fast charging
+      targetPercentage, 
       connector.power
     );
     
@@ -68,6 +68,16 @@ const StationDetails: React.FC<StationDetailsProps> = ({
       const mins = chargingMinutes % 60;
       return `${hours}h ${mins}m`;
     }
+  };
+  
+  // Calculate how much range would be added with a quick charge to 80%
+  const calculateAddedRange = (connector: any) => {
+    if (!model) return 0;
+    
+    // Calculate range added by charging from current to 80%
+    const percentageAdded = 80 - batteryPercentage;
+    const rangeAdded = (model.range * percentageAdded) / 100;
+    return Math.round(rangeAdded);
   };
   
   return (
@@ -86,7 +96,7 @@ const StationDetails: React.FC<StationDetailsProps> = ({
       
       {station.distanceFromRoute && (
         <div className="text-sm mb-3">
-          <span className="font-medium">Distance from route:</span> {station.distanceFromRoute} meters
+          <span className="font-medium">Distance from route:</span> {(station.distanceFromRoute / 1000).toFixed(1)} km
         </div>
       )}
       
@@ -123,12 +133,22 @@ const StationDetails: React.FC<StationDetailsProps> = ({
               <div className="text-sm text-gray-600">{connector.power}kW</div>
               
               {connector.available && model && (
-                <div className="mt-2 pt-2 border-t flex justify-between text-sm">
-                  <div className="flex items-center">
-                    <Zap className="h-3.5 w-3.5 mr-1" />
-                    <span>Est. charge time (to 80%):</span>
+                <div className="mt-2 pt-2 border-t space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <div className="flex items-center">
+                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      <span>Charge time (to 80%):</span>
+                    </div>
+                    <span className="font-medium">{calculateChargeTime(connector)}</span>
                   </div>
-                  <span className="font-medium">{calculateChargeTime(connector)}</span>
+                  
+                  <div className="flex justify-between text-sm">
+                    <div className="flex items-center">
+                      <Battery className="h-3.5 w-3.5 mr-1" />
+                      <span>Range added:</span>
+                    </div>
+                    <span className="font-medium">+{calculateAddedRange(connector)} km</span>
+                  </div>
                 </div>
               )}
             </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/Sidebar';
@@ -10,6 +9,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { MapLegend } from '@/components/MapLegend';
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { 
   ResizablePanelGroup, 
   ResizablePanel, 
@@ -29,24 +29,20 @@ import { Loader2, X, ChevronRight, ChevronLeft, Map } from 'lucide-react';
 const Index = () => {
   const { toast } = useToast();
   
-  // Location state
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
   const [startCoords, setStartCoords] = useState<[number, number] | undefined>();
   const [endCoords, setEndCoords] = useState<[number, number] | undefined>();
   
-  // Search parameters
   const [searchRadius, setSearchRadius] = useState(2);
   const [batteryPercentage, setBatteryPercentage] = useState(80);
   const [selectedEVModel, setSelectedEVModel] = useState(indianEVModels[0].id);
   const [showHotels, setShowHotels] = useState(true);
   const [showRestaurants, setShowRestaurants] = useState(true);
   
-  // UI state
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [isJourneyVisible, setIsJourneyVisible] = useState(false);
   
-  // Loading and route state
   const [isLoading, setIsLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{
     geometry: any;
@@ -54,16 +50,13 @@ const Index = () => {
     duration: number;
   } | null>(null);
   
-  // POI state
   const [evStations, setEVStations] = useState<EVStation[]>([]);
   const [hotels, setHotels] = useState<POI[]>([]);
   const [restaurants, setRestaurants] = useState<POI[]>([]);
   
-  // Selected item state
   const [selectedStation, setSelectedStation] = useState<EVStation | null>(null);
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   
-  // Cache for route data to ensure consistency
   const [routeCache, setRouteCache] = useState<{
     routeHash: string;
     evStations: EVStation[];
@@ -71,10 +64,8 @@ const Index = () => {
     restaurants: POI[];
   } | null>(null);
   
-  // Get selected EV model object
   const selectedModelObject = indianEVModels.find(model => model.id === selectedEVModel) || indianEVModels[0];
   
-  // Handle location selection
   const handleStartLocationSelect = (location: LocationSuggestion) => {
     setStartLocation(location.name);
     setStartCoords(location.coordinates);
@@ -85,21 +76,17 @@ const Index = () => {
     setEndCoords(location.coordinates);
   };
   
-  // Function to create a route hash for caching
   const createRouteHash = (start?: [number, number], end?: [number, number]): string => {
     if (!start || !end) return '';
     return `${start[0].toFixed(4)},${start[1].toFixed(4)}_${end[0].toFixed(4)},${end[1].toFixed(4)}`;
   };
   
-  // Function to update POIs based on the current route and radius
   const updatePOIs = async (radius: number) => {
     if (!routeInfo || !startCoords || !endCoords) return;
     
     const routeHash = createRouteHash(startCoords, endCoords);
     
-    // Check if we already have cached data for this route
     if (routeCache && routeCache.routeHash === routeHash) {
-      // Filter based on radius
       const stationsWithinRadius = routeCache.evStations.filter(
         station => (station.distanceFromRoute || 0) <= radius * 1000
       );
@@ -129,11 +116,9 @@ const Index = () => {
       return;
     }
     
-    // If no cache or different route, fetch new data
     try {
       setIsLoading(true);
       
-      // Get EV stations
       const stations = await findEVStationsAlongRoute(
         routeInfo.geometry, 
         radius,
@@ -141,29 +126,24 @@ const Index = () => {
         endCoords
       );
       
-      // Get hotels if enabled
       let hotelData: POI[] = [];
       if (showHotels) {
         hotelData = await findPOIsAlongRoute(routeInfo.geometry, radius, 'hotel');
       }
       
-      // Get restaurants if enabled
       let restaurantData: POI[] = [];
       if (showRestaurants) {
         restaurantData = await findPOIsAlongRoute(routeInfo.geometry, radius, 'restaurant');
       }
       
-      // Update state
       setEVStations(stations);
       setHotels(hotelData);
       setRestaurants(restaurantData);
       
-      // Show journey panel when we have stations
       if (stations.length > 0) {
         setIsJourneyVisible(true);
       }
       
-      // Update cache
       setRouteCache({
         routeHash,
         evStations: stations,
@@ -190,39 +170,32 @@ const Index = () => {
     }
   };
 
-  // Update POIs when radius, hotels, or restaurants toggles change
   useEffect(() => {
     if (routeInfo) {
       updatePOIs(searchRadius);
     }
   }, [searchRadius, showHotels, showRestaurants]);
   
-  // Function to handle search radius change
   const handleSearchRadiusChange = (radius: number) => {
     setSearchRadius(radius);
   };
   
-  // Function to handle battery percentage change
   const handleBatteryPercentageChange = (percentage: number) => {
     setBatteryPercentage(percentage);
   };
   
-  // Function to handle EV model change
   const handleEVModelChange = (modelId: string) => {
     setSelectedEVModel(modelId);
   };
   
-  // Function to handle hotel toggle
   const handleShowHotelsChange = (show: boolean) => {
     setShowHotels(show);
   };
   
-  // Function to handle restaurant toggle
   const handleShowRestaurantsChange = (show: boolean) => {
     setShowRestaurants(show);
   };
   
-  // Main search function
   const handleSearch = async () => {
     if (!startCoords || !endCoords) {
       toast({
@@ -238,14 +211,12 @@ const Index = () => {
     }
     
     setIsLoading(true);
-    // Clear previous POIs
     setEVStations([]);
     setHotels([]);
     setRestaurants([]);
     setRouteCache(null);
     
     try {
-      // Get route
       const route = await getRoute(startCoords, endCoords);
       
       if (route) {
@@ -265,7 +236,6 @@ const Index = () => {
           )
         });
         
-        // Find EV stations and POIs
         await updatePOIs(searchRadius);
         
       } else {
@@ -307,7 +277,6 @@ const Index = () => {
     setSelectedStation(null);
   };
 
-  // For mobile view
   const [isMobile, setIsMobile] = useState(false);
   
   useEffect(() => {
@@ -326,9 +295,7 @@ const Index = () => {
   return (
     <div className="h-screen w-full flex flex-col">
       {isMobile ? (
-        // Mobile layout
         <div className="h-screen flex flex-col">
-          {/* Map area with sidebar trigger */}
           <div className="relative flex-grow">
             <MapComponent
               startPoint={startCoords}
@@ -354,7 +321,7 @@ const Index = () => {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-full sm:w-[350px] p-0">
-                <div className="h-full overflow-auto">
+                <div className="h-full overflow-y-auto">
                   <Sidebar
                     startLocation={startLocation}
                     endLocation={endLocation}
@@ -377,31 +344,44 @@ const Index = () => {
                     onShowRestaurantsChange={handleShowRestaurantsChange}
                     onSearch={handleSearch}
                   />
+                  
+                  {evStations.length > 0 && (
+                    <div className="px-4 pb-4">
+                      <RouteJourney
+                        startLocation={startLocation}
+                        endLocation={endLocation}
+                        evStations={evStations}
+                        selectedEVModel={selectedModelObject}
+                        batteryPercentage={batteryPercentage}
+                      />
+                    </div>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
             
-            {/* Journey view button */}
             {evStations.length > 0 && (
-              <Sheet>
-                <SheetTrigger asChild>
+              <Drawer>
+                <DrawerTrigger asChild>
                   <Button 
                     className="absolute bottom-4 left-4 z-10"
                     size="sm"
                   >
                     View Journey Plan
                   </Button>
-                </SheetTrigger>
-                <SheetContent side="bottom" className="h-[60vh]">
-                  <RouteJourney
-                    startLocation={startLocation}
-                    endLocation={endLocation}
-                    evStations={evStations}
-                    selectedEVModel={selectedModelObject}
-                    batteryPercentage={batteryPercentage}
-                  />
-                </SheetContent>
-              </Sheet>
+                </DrawerTrigger>
+                <DrawerContent className="max-h-[90vh]">
+                  <div className="p-4 max-h-[80vh] overflow-y-auto">
+                    <RouteJourney
+                      startLocation={startLocation}
+                      endLocation={endLocation}
+                      evStations={evStations}
+                      selectedEVModel={selectedModelObject}
+                      batteryPercentage={batteryPercentage}
+                    />
+                  </div>
+                </DrawerContent>
+              </Drawer>
             )}
             
             {isLoading && (
@@ -415,7 +395,6 @@ const Index = () => {
           </div>
         </div>
       ) : (
-        // Desktop layout with resizable panels
         <ResizablePanelGroup
           direction="horizontal"
           className="h-screen w-full"
@@ -430,7 +409,7 @@ const Index = () => {
             onCollapse={() => setIsSidebarVisible(false)}
             onExpand={() => setIsSidebarVisible(true)}
           >
-            <div className={`h-full transition-opacity ${isSidebarVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`h-full transition-opacity overflow-y-auto ${isSidebarVisible ? 'opacity-100' : 'opacity-0'}`}>
               <Sidebar
                 startLocation={startLocation}
                 endLocation={endLocation}
@@ -453,6 +432,18 @@ const Index = () => {
                 onShowRestaurantsChange={handleShowRestaurantsChange}
                 onSearch={handleSearch}
               />
+              
+              {evStations.length > 0 && routeInfo && (
+                <div className="px-4 pb-4">
+                  <RouteJourney
+                    startLocation={startLocation}
+                    endLocation={endLocation}
+                    evStations={evStations}
+                    selectedEVModel={selectedModelObject}
+                    batteryPercentage={batteryPercentage}
+                  />
+                </div>
+              )}
             </div>
           </ResizablePanel>
           
@@ -475,7 +466,6 @@ const Index = () => {
                     />
                     <MapLegend showPOI={showHotels || showRestaurants} />
                     
-                    {/* Sidebar toggle button */}
                     {!isSidebarVisible && (
                       <Button 
                         variant="secondary" 
@@ -487,7 +477,6 @@ const Index = () => {
                       </Button>
                     )}
                     
-                    {/* Journey toggle button */}
                     <Button 
                       variant="secondary" 
                       size="sm"
@@ -534,7 +523,6 @@ const Index = () => {
                 />
                 <MapLegend showPOI={showHotels || showRestaurants} />
                 
-                {/* Sidebar toggle button */}
                 {!isSidebarVisible && (
                   <Button 
                     variant="secondary" 
@@ -546,7 +534,6 @@ const Index = () => {
                   </Button>
                 )}
                 
-                {/* Show journey button when we have stations but panel is hidden */}
                 {evStations.length > 0 && !isJourneyVisible && (
                   <Button 
                     className="absolute bottom-4 right-4 z-10"
@@ -571,7 +558,6 @@ const Index = () => {
         </ResizablePanelGroup>
       )}
       
-      {/* Dialog for EV Station details */}
       <Dialog open={!!selectedStation} onOpenChange={(open) => !open && setSelectedStation(null)}>
         <DialogContent>
           {selectedStation && (
@@ -585,7 +571,6 @@ const Index = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Dialog for POI details */}
       <Dialog open={!!selectedPOI} onOpenChange={(open) => !open && setSelectedPOI(null)}>
         <DialogContent>
           {selectedPOI && (
@@ -600,7 +585,6 @@ const Index = () => {
   );
 };
 
-// ChevronDown component for the toggle button
 const ChevronDown = ({ className }: { className?: string }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 

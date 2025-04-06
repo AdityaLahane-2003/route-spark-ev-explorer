@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface MapLegendProps {
   showPOI?: boolean;
@@ -21,6 +22,12 @@ export const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
         <div className="flex items-center">
           <div className="w-3 h-3 rounded-full bg-red-600 mr-2"></div>
           <span>EV Station - Unavailable</span>
+        </div>
+        <div className="flex items-center">
+          <div className="flex items-center h-3 mr-2">
+            <AlertTriangle className="w-3 h-3 text-red-500" />
+          </div>
+          <span>Station not reachable</span>
         </div>
         
         {showPOI && (
