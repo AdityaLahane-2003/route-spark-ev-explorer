@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle } from 'lucide-react';
 
 interface MapLegendProps {
   showPOI?: boolean;
@@ -30,15 +30,33 @@ export const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
           <span>Station not reachable</span>
         </div>
         
+        {/* Journey plan indicators */}
+        <div className="mt-1 pt-1 border-t border-gray-200">
+          <div className="flex items-center mb-1">
+            <div className="flex items-center h-3 mr-2">
+              <CheckCircle className="w-3 h-3 text-green-500" />
+            </div>
+            <span>Required charging stop</span>
+          </div>
+          <div className="flex items-center">
+            <div className="flex items-center h-3 mr-2">
+              <ArrowRight className="w-3 h-3 text-blue-500" />
+            </div>
+            <span>Optional charging stop</span>
+          </div>
+        </div>
+        
         {showPOI && (
           <>
-            <div className="flex items-center mt-1">
-              <div className="w-3 h-3 rounded-full bg-blue-600 mr-2"></div>
-              <span>Hotel</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 rounded-full bg-violet-600 mr-2"></div>
-              <span>Restaurant</span>
+            <div className="mt-1 pt-1 border-t border-gray-200">
+              <div className="flex items-center">
+                <div className="w-3 h-3 rounded-full bg-blue-600 mr-2"></div>
+                <span>Hotel</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 rounded-full bg-violet-600 mr-2"></div>
+                <span>Restaurant</span>
+              </div>
             </div>
           </>
         )}

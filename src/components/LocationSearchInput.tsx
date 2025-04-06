@@ -71,7 +71,15 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
     setInputValue(suggestion.name);
     onChange(suggestion.name);
     onSelect(suggestion);
-    setIsOpen(false); // Always close suggestions after selection
+    setSuggestions([]); // Clear suggestions immediately
+    setIsOpen(false);   // Ensure dropdown is closed
+  };
+
+  const handleInputFocus = () => {
+    // Only show suggestions if we have valid ones and user is actively typing
+    if (inputValue.trim().length > 2 && suggestions.length > 0) {
+      setIsOpen(true);
+    }
   };
 
   return (
@@ -87,7 +95,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
           placeholder={placeholder}
           value={inputValue}
           onChange={handleInputChange}
-          onFocus={() => inputValue.trim().length > 2 && suggestions.length > 0 && setIsOpen(true)}
+          onFocus={handleInputFocus}
         />
       </div>
       

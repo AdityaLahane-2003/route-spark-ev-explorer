@@ -1,6 +1,8 @@
+
 import React from 'react';
-import { Circle, ArrowRight, AlertTriangle, Battery, Zap } from 'lucide-react';
+import { Circle, ArrowRight, AlertTriangle, Battery, Zap, CheckCircle } from 'lucide-react';
 import { EVStation, EVModel, calculateDistance } from '@/utils/api';
+import { ScrollArea } from './ui/scroll-area';
 
 interface RouteJourneyProps {
   startLocation: string;
@@ -24,8 +26,8 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
   // Calculate remaining range based on battery percentage
   const initialRange = Math.round((selectedEVModel.range * batteryPercentage) / 100);
   
-  // Create journey calculation with battery projections
-  const journeyPlan = calculateJourneyPath(
+  // Create journey calculation with battery projections and optimal stops
+  const journeyPlan = calculateOptimalJourneyPath(
     evStations,
     selectedEVModel,
     batteryPercentage,
@@ -34,8 +36,8 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
   );
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <h3 className="text-lg font-semibold mb-4">Journey Plan</h3>
+    <div className="bg-white rounded-lg">
+      <h3 className="text-lg font-semibold mb-3">Journey Plan</h3>
       
       <div className="space-y-1">
         {/* Starting point */}
@@ -59,8 +61,10 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
             <div className={`ml-4 h-6 border-l-2 border-dashed ${segment.isReachable ? 'border-gray-300' : 'border-red-400'}`}></div>
             
             <div className="flex items-center">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${segment.isReachable ? 'bg-green-500' : 'bg-red-500'} text-white mr-3`}>
-                {segment.isReachable ? <ArrowRight className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${segment.status === 'required' ? 'bg-green-500' : segment.status === 'optional' ? 'bg-blue-500' : 'bg-red-500'} text-white mr-3`}>
+                {segment.status === 'required' ? <CheckCircle className="h-4 w-4" /> : 
+                 segment.status === 'optional' ? <ArrowRight className="h-4 w-4" /> : 
+                 <AlertTriangle className="h-4 w-4" />}
               </div>
               <div className="flex-1 flex justify-between items-start">
                 <div>
@@ -71,10 +75,16 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
                       {segment.distanceFromRoute ? ` • ${(segment.distanceFromRoute / 1000).toFixed(1)} km from route` : ''}
                     </p>
                     
-                    {!segment.isReachable && (
+                    {segment.status === 'unreachable' && (
                       <p className="text-red-500 font-medium flex items-center">
                         <AlertTriangle className="h-3.5 w-3.5 mr-1" />
                         Not reachable with current battery
+                      </p>
+                    )}
+                    
+                    {segment.status === 'optional' && (
+                      <p className="text-blue-500 font-medium">
+                        Optional stop - can skip
                       </p>
                     )}
                     
@@ -83,16 +93,22 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
                         Arrival battery: {segment.arrivalBattery}%
                       </p>
                     )}
+
+                    {segment.departureCharge !== undefined && (
+                      <p className="text-gray-600">
+                        After charging: {segment.departureCharge}%
+                      </p>
+                    )}
                   </div>
                 </div>
                 
                 <div className="text-right">
                   {segment.chargingTime !== undefined && (
                     <div>
-                      <p className="font-medium text-sm">{segment.chargingTime} min</p>
+                      <p className="font-medium text-sm">{segment.chargingTime < 60 ? `${segment.chargingTime} min` : `${Math.floor(segment.chargingTime / 60)}h ${segment.chargingTime % 60}m`}</p>
                       <p className="text-xs text-gray-500 flex items-center justify-end">
                         <Zap className="h-3 w-3 mr-1" />
-                        Quick charge
+                        {segment.status === 'required' ? 'Required charge' : 'Quick charge'}
                       </p>
                     </div>
                   )}
@@ -112,7 +128,11 @@ const RouteJourney: React.FC<RouteJourneyProps> = ({
           </div>
           <div>
             <p className="font-medium">{endLocation}</p>
-            <p className="text-xs text-gray-500">Destination</p>
+            {journeyPlan.length > 0 && journeyPlan[journeyPlan.length - 1].finalBattery !== undefined && (
+              <p className="text-xs text-gray-600">
+                Estimated arrival battery: {journeyPlan[journeyPlan.length - 1].finalBattery}%
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -130,9 +150,11 @@ interface JourneySegment {
   isReachable: boolean;
   arrivalBattery?: number;
   departureCharge?: number;
+  finalBattery?: number;
+  status: 'required' | 'optional' | 'unreachable';
 }
 
-function calculateJourneyPath(
+function calculateOptimalJourneyPath(
   stations: EVStation[],
   evModel: EVModel,
   startBatteryPercentage: number,
@@ -141,65 +163,143 @@ function calculateJourneyPath(
 ): JourneySegment[] {
   if (!stations.length) return [];
   
+  // Sort stations by their route sequence (distance from start)
+  const sortedStations = [...stations].sort((a, b) => {
+    const aDistance = a.distanceFromStart || 0;
+    const bDistance = b.distanceFromStart || 0;
+    return aDistance - bDistance;
+  });
+  
   const journeyPlan: JourneySegment[] = [];
   let currentBatteryPercentage = startBatteryPercentage;
-  let currentPosition = stations[0].location;
-  let skipNextStation = false;
+  let currentPosition = sortedStations[0].location;
+  let previousPosition = null;
+  let totalDistanceFromStart = 0;
   
-  // Start from the first station, calculate for each subsequent station
-  for (let i = 0; i < stations.length; i++) {
-    const station = stations[i];
-    const nextStation = stations[i + 1];
+  // Full charge value - for most EVs we target 80% for fast charging
+  const targetFastCharge = 80;
+  const fullCharge = 100;
+  const minimumSafeBattery = 10; // Don't let battery go below this percentage
+  
+  // Process each station to determine if it's required, optional, or unreachable
+  for (let i = 0; i < sortedStations.length; i++) {
+    const station = sortedStations[i];
+    const isLastStation = i === sortedStations.length - 1;
+    const nextStation = i < sortedStations.length - 1 ? sortedStations[i + 1] : null;
     
-    // Calculate distance to this station
-    let distanceToCurrent = 0;
-    if (i === 0) {
-      // For first station, we estimate distance based on route distance
-      distanceToCurrent = station.distanceFromRoute ? (station.distanceFromRoute / 1000) + 10 : 15;
+    // For first station, estimate distance from start location
+    let distanceToStation = 0;
+    if (previousPosition) {
+      distanceToStation = calculateDistance(previousPosition, station.location);
     } else {
-      // For subsequent stations, calculate from previous station
-      distanceToCurrent = calculateDistance(currentPosition, station.location);
+      // Estimate distance to first station if distanceFromStart is available
+      distanceToStation = station.distanceFromStart ? station.distanceFromStart / 1000 : 10;
     }
     
-    // Calculate remaining battery percentage after reaching this station
+    // Calculate energy consumption to reach this station
     const energyUsedPerKm = evModel.batteryCapacity / evModel.range;
-    const energyUsed = distanceToCurrent * energyUsedPerKm;
+    const energyUsed = distanceToStation * energyUsedPerKm;
     const percentageUsed = (energyUsed / evModel.batteryCapacity) * 100;
     const arrivalBatteryPercentage = Math.max(0, Math.round(currentBatteryPercentage - percentageUsed));
     
-    // Check if station is reachable with current battery
+    // Calculate distance to the next station (if any)
+    let distanceToNextStation = 0;
+    if (nextStation) {
+      if (station.distanceFromStart !== undefined && nextStation.distanceFromStart !== undefined) {
+        distanceToNextStation = (nextStation.distanceFromStart - station.distanceFromStart) / 1000;
+      } else {
+        distanceToNextStation = calculateDistance(station.location, nextStation.location);
+      }
+    } else {
+      // If no next station, use distance to destination (estimate)
+      distanceToNextStation = 20; // Default if we can't calculate
+      
+      // If we have route info, we can estimate based on total route length
+      if (station.distanceFromStart !== undefined) {
+        const distanceFromStationToEnd = (50 - station.distanceFromStart) / 1000;
+        if (distanceFromStationToEnd > 0) {
+          distanceToNextStation = distanceFromStationToEnd;
+        }
+      }
+    }
+    
+    // Calculate energy needed to reach the next station
+    const energyForNextSegment = distanceToNextStation * energyUsedPerKm;
+    const percentageForNextSegment = (energyForNextSegment / evModel.batteryCapacity) * 100;
+    
+    // Determine if this station is reachable
     const isReachable = arrivalBatteryPercentage > 0;
     
-    // Get fastest charging connector
-    const fastestConnector = station.connectors
-      .filter(c => c.available)
-      .sort((a, b) => b.power - a.power)[0];
+    // Determine if charging at this station is required to reach the next one
+    // We need enough battery to reach next station plus safety margin
+    const canReachNextWithoutCharging = arrivalBatteryPercentage > (percentageForNextSegment + minimumSafeBattery);
     
-    // Calculate charging time needed (to 80% for quick charging)
-    const targetCharge = nextStation ? 80 : 50; // Charge less if this is the last station
-    const chargingTime = fastestConnector 
-      ? Math.max(15, Math.round((evModel.batteryCapacity * (targetCharge - arrivalBatteryPercentage) / 100) / (fastestConnector.power / 60)))
-      : 45; // Default 45 min if no connector info
+    // Determine status of this station
+    let stationStatus: 'required' | 'optional' | 'unreachable';
+    let departureCharge = arrivalBatteryPercentage;
+    let chargingTime;
+    
+    if (!isReachable) {
+      stationStatus = 'unreachable';
+    } else if (canReachNextWithoutCharging && !isLastStation) {
+      stationStatus = 'optional';
+    } else {
+      stationStatus = 'required';
+      
+      // Calculate required charging
+      // Get fastest available connector
+      const fastestConnector = station.connectors
+        .filter(c => c.available)
+        .sort((a, b) => b.power - a.power)[0];
+      
+      if (fastestConnector) {
+        // How much do we need to charge?
+        const minimumChargeNeeded = percentageForNextSegment + minimumSafeBattery;
+        const targetCharge = Math.min(
+          // Either fast charge target or just enough to reach next station plus safety
+          isLastStation ? targetFastCharge : Math.max(targetFastCharge, arrivalBatteryPercentage + minimumChargeNeeded),
+          fullCharge
+        );
+        
+        // Calculate charging time (minutes)
+        const chargingPercentage = targetCharge - arrivalBatteryPercentage;
+        chargingTime = Math.max(10, Math.round((evModel.batteryCapacity * chargingPercentage / 100) / (fastestConnector.power / 60)));
+        
+        departureCharge = targetCharge;
+      } else {
+        // No connector info, use default
+        chargingTime = 30;
+        departureCharge = Math.min(arrivalBatteryPercentage + 30, fullCharge);
+      }
+    }
+    
+    // Calculate final battery percentage after this leg of journey
+    const finalBattery = isLastStation ? 
+      arrivalBatteryPercentage - percentageForNextSegment :
+      undefined;
     
     // Add station to journey plan
     journeyPlan.push({
       id: station.id,
       name: station.name,
-      distanceFromPrevious: distanceToCurrent,
+      distanceFromPrevious: distanceToStation,
       distanceFromRoute: station.distanceFromRoute,
-      chargingTime: isReachable ? chargingTime : undefined,
+      chargingTime: stationStatus === 'required' ? chargingTime : undefined,
       isReachable,
-      arrivalBattery: arrivalBatteryPercentage
+      arrivalBattery: arrivalBatteryPercentage,
+      departureCharge: stationStatus === 'required' ? departureCharge : undefined,
+      finalBattery: finalBattery > 0 ? Math.round(finalBattery) : undefined,
+      status: stationStatus
     });
     
-    // Update for next iteration if reachable
+    // Update for next iteration if we can reach this station
     if (isReachable) {
-      currentPosition = station.location;
-      currentBatteryPercentage = targetCharge; // After charging at this station
-    } else {
-      // If not reachable, keep same percentage for next calculation
-      // This will likely make next station unreachable too
+      previousPosition = station.location;
+      currentBatteryPercentage = stationStatus === 'required' ? departureCharge : arrivalBatteryPercentage;
     }
+    
+    // If we can't reach this station, subsequent stations will use the same battery percentage
+    // which will likely make them unreachable too
   }
   
   return journeyPlan;
