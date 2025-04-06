@@ -42,7 +42,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ showPOI = false }) => {
             <div className="flex items-center h-3 mr-2">
               <ArrowRight className="w-3 h-3 text-blue-500" />
             </div>
-            <span>Optional charging stop</span>
+            <span>Can skip this stop</span>
           </div>
         </div>
         

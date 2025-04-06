@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import LocationSearchInput from './LocationSearchInput';
 import RouteJourney from './RouteJourney';
 import { LocationSuggestion, EVModel, indianEVModels } from '@/utils/api';
-import { Search, Battery, Zap, Hotel, UtensilsCrossed, Filter } from 'lucide-react';
+import { Search, Battery, Hotel, UtensilsCrossed, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';

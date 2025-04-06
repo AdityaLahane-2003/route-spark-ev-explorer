@@ -2,7 +2,6 @@
 import React from 'react';
 import { Circle, ArrowRight, AlertTriangle, Battery, Zap, CheckCircle } from 'lucide-react';
 import { EVStation, EVModel, calculateDistance } from '@/utils/api';
-import { ScrollArea } from './ui/scroll-area';
 
 interface RouteJourneyProps {
   startLocation: string;
@@ -165,9 +164,7 @@ function calculateOptimalJourneyPath(
   
   // Sort stations by their route sequence (distance from start)
   const sortedStations = [...stations].sort((a, b) => {
-    const aDistance = a.distanceFromStart || 0;
-    const bDistance = b.distanceFromStart || 0;
-    return aDistance - bDistance;
+    return (a.distanceFromStart || 0) - (b.distanceFromStart || 0);
   });
   
   const journeyPlan: JourneySegment[] = [];
@@ -180,6 +177,84 @@ function calculateOptimalJourneyPath(
   const targetFastCharge = 80;
   const fullCharge = 100;
   const minimumSafeBattery = 10; // Don't let battery go below this percentage
+  
+  // Calculate total route distance from start to end using the furthest station distance as approximation
+  let totalRouteDistance = 0;
+  
+  if (sortedStations.length > 0 && sortedStations[sortedStations.length - 1].distanceFromStart) {
+    totalRouteDistance = sortedStations[sortedStations.length - 1].distanceFromStart / 1000; // Convert to km
+  } else {
+    // Fallback if no distance data
+    totalRouteDistance = 100; // Default assumption
+  }
+  
+  // Let's simulate trip with skipping optional stations
+  let optionalStations: number[] = [];
+  
+  // First pass - identify potentially optional stops
+  let simulatedBattery = currentBatteryPercentage;
+  let lastRequiredStopIndex = -1;
+  
+  for (let i = 0; i < sortedStations.length; i++) {
+    const station = sortedStations[i];
+    const isLastStation = i === sortedStations.length - 1;
+    const nextStation = i < sortedStations.length - 1 ? sortedStations[i + 1] : null;
+    
+    // Calculate distance to this station
+    let distanceToStation = 0;
+    
+    if (i === 0) {
+      // First station - use distanceFromStart as estimate, or default to 10km
+      distanceToStation = station.distanceFromStart ? station.distanceFromStart / 1000 : 10;
+    } else {
+      // Calculate distance from previous station
+      const prevStation = sortedStations[i-1];
+      if (prevStation.distanceFromStart !== undefined && station.distanceFromStart !== undefined) {
+        distanceToStation = (station.distanceFromStart - prevStation.distanceFromStart) / 1000;
+      } else {
+        distanceToStation = calculateDistance(prevStation.location, station.location);
+      }
+    }
+    
+    // Calculate energy consumption
+    const energyUsedPerKm = evModel.batteryCapacity / evModel.range;
+    const percentageUsed = (distanceToStation * energyUsedPerKm / evModel.batteryCapacity) * 100;
+    const arrivalBattery = Math.max(0, simulatedBattery - percentageUsed);
+    
+    // Calculate distance to next station or end
+    let distanceToNext = 0;
+    if (nextStation) {
+      if (station.distanceFromStart !== undefined && nextStation.distanceFromStart !== undefined) {
+        distanceToNext = (nextStation.distanceFromStart - station.distanceFromStart) / 1000;
+      } else {
+        distanceToNext = calculateDistance(station.location, nextStation.location);
+      }
+    } else {
+      // Distance to end
+      distanceToNext = totalRouteDistance - (station.distanceFromStart ? station.distanceFromStart / 1000 : 0);
+      if (distanceToNext < 0) distanceToNext = 20; // Fallback if calculation is odd
+    }
+    
+    // Calculate if we need to charge here
+    const energyForNextLeg = (distanceToNext * energyUsedPerKm / evModel.batteryCapacity) * 100;
+    const canReachNextWithoutCharging = arrivalBattery > (energyForNextLeg + minimumSafeBattery);
+    
+    if (!canReachNextWithoutCharging) {
+      // This is a required station
+      lastRequiredStopIndex = i;
+      // How much to charge
+      const neededCharge = Math.min(fullCharge, energyForNextLeg + 20); // 20% safety buffer
+      simulatedBattery = Math.max(arrivalBattery, neededCharge);
+    } else {
+      // This station is potentially optional
+      optionalStations.push(i);
+      // Battery continues to drain
+      simulatedBattery = arrivalBattery;
+    }
+  }
+  
+  // Finally process each station and build the journey plan
+  let skippableStations: Set<number> = new Set(optionalStations);
   
   // Process each station to determine if it's required, optional, or unreachable
   for (let i = 0; i < sortedStations.length; i++) {
@@ -212,14 +287,10 @@ function calculateOptimalJourneyPath(
       }
     } else {
       // If no next station, use distance to destination (estimate)
-      distanceToNextStation = 20; // Default if we can't calculate
-      
-      // If we have route info, we can estimate based on total route length
-      if (station.distanceFromStart !== undefined) {
-        const distanceFromStationToEnd = (50 - station.distanceFromStart) / 1000;
-        if (distanceFromStationToEnd > 0) {
-          distanceToNextStation = distanceFromStationToEnd;
-        }
+      if (station.distanceFromStart !== undefined && totalRouteDistance > 0) {
+        distanceToNextStation = totalRouteDistance - (station.distanceFromStart / 1000);
+      } else {
+        distanceToNextStation = 20; // Default if we can't calculate
       }
     }
     
@@ -241,7 +312,7 @@ function calculateOptimalJourneyPath(
     
     if (!isReachable) {
       stationStatus = 'unreachable';
-    } else if (canReachNextWithoutCharging && !isLastStation) {
+    } else if (canReachNextWithoutCharging && skippableStations.has(i)) {
       stationStatus = 'optional';
     } else {
       stationStatus = 'required';
@@ -257,13 +328,24 @@ function calculateOptimalJourneyPath(
         const minimumChargeNeeded = percentageForNextSegment + minimumSafeBattery;
         const targetCharge = Math.min(
           // Either fast charge target or just enough to reach next station plus safety
-          isLastStation ? targetFastCharge : Math.max(targetFastCharge, arrivalBatteryPercentage + minimumChargeNeeded),
+          Math.max(targetFastCharge, arrivalBatteryPercentage + minimumChargeNeeded),
           fullCharge
         );
         
         // Calculate charging time (minutes)
         const chargingPercentage = targetCharge - arrivalBatteryPercentage;
-        chargingTime = Math.max(10, Math.round((evModel.batteryCapacity * chargingPercentage / 100) / (fastestConnector.power / 60)));
+        const chargingEnergy = (evModel.batteryCapacity * chargingPercentage / 100);
+        
+        // More realistic charging calculation:
+        // Fast chargers slow down as battery fills up
+        let adjustedPower = fastestConnector.power;
+        if (arrivalBatteryPercentage > 60) {
+          // Power decreases as battery level increases
+          adjustedPower = fastestConnector.power * (1 - ((arrivalBatteryPercentage - 60) / 100));
+        }
+        
+        // Minimum 10 minutes charging time
+        chargingTime = Math.max(10, Math.round(chargingEnergy / (adjustedPower / 60)));
         
         departureCharge = targetCharge;
       } else {
@@ -275,7 +357,7 @@ function calculateOptimalJourneyPath(
     
     // Calculate final battery percentage after this leg of journey
     const finalBattery = isLastStation ? 
-      arrivalBatteryPercentage - percentageForNextSegment :
+      arrivalBatteryPercentage - Math.round(percentageForNextSegment) :
       undefined;
     
     // Add station to journey plan
@@ -288,7 +370,7 @@ function calculateOptimalJourneyPath(
       isReachable,
       arrivalBattery: arrivalBatteryPercentage,
       departureCharge: stationStatus === 'required' ? departureCharge : undefined,
-      finalBattery: finalBattery > 0 ? Math.round(finalBattery) : undefined,
+      finalBattery: finalBattery !== undefined && finalBattery > 0 ? finalBattery : undefined,
       status: stationStatus
     });
     
@@ -297,9 +379,6 @@ function calculateOptimalJourneyPath(
       previousPosition = station.location;
       currentBatteryPercentage = stationStatus === 'required' ? departureCharge : arrivalBatteryPercentage;
     }
-    
-    // If we can't reach this station, subsequent stations will use the same battery percentage
-    // which will likely make them unreachable too
   }
   
   return journeyPlan;

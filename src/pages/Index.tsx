@@ -1,14 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/Sidebar';
 import MapComponent from '@/components/Map';
 import StationDetails from '@/components/StationDetails';
 import POIDetails from '@/components/POIDetails';
-import RouteJourney from '@/components/RouteJourney';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { MapLegend } from '@/components/MapLegend';
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { 
   ResizablePanelGroup, 
@@ -24,7 +23,7 @@ import {
   POI, 
   indianEVModels 
 } from '@/utils/api';
-import { Loader2, X, ChevronRight, ChevronLeft, Map } from 'lucide-react';
+import { Loader2, X, ChevronRight } from 'lucide-react';
 
 const Index = () => {
   const { toast } = useToast();
@@ -34,14 +33,13 @@ const Index = () => {
   const [startCoords, setStartCoords] = useState<[number, number] | undefined>();
   const [endCoords, setEndCoords] = useState<[number, number] | undefined>();
   
-  const [searchRadius, setSearchRadius] = useState(2);
+  const [searchRadius, setSearchRadius] = useState(5); // Updated to default to 5km
   const [batteryPercentage, setBatteryPercentage] = useState(80);
   const [selectedEVModel, setSelectedEVModel] = useState(indianEVModels[0].id);
   const [showHotels, setShowHotels] = useState(true);
   const [showRestaurants, setShowRestaurants] = useState(true);
   
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const [isJourneyVisible, setIsJourneyVisible] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{
@@ -139,10 +137,6 @@ const Index = () => {
       setEVStations(stations);
       setHotels(hotelData);
       setRestaurants(restaurantData);
-      
-      if (stations.length > 0) {
-        setIsJourneyVisible(true);
-      }
       
       setRouteCache({
         routeHash,
@@ -307,7 +301,6 @@ const Index = () => {
               onStationClick={handleStationClick}
               onPOIClick={handlePOIClick}
             />
-            <MapLegend showPOI={showHotels || showRestaurants} />
             
             <Sheet>
               <SheetTrigger asChild>
@@ -316,12 +309,12 @@ const Index = () => {
                   size="sm" 
                   className="absolute top-4 left-4 z-10"
                 >
-                  <Map className="h-4 w-4 mr-2" />
+                  <Search className="h-4 w-4 mr-2" />
                   Search
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-full sm:w-[350px] p-0">
-                <div className="h-full overflow-y-auto">
+                <div className="h-full">
                   <Sidebar
                     startLocation={startLocation}
                     endLocation={endLocation}
@@ -333,6 +326,7 @@ const Index = () => {
                     isLoading={isLoading}
                     routeDistance={routeInfo?.distance}
                     routeDuration={routeInfo?.duration}
+                    evStations={evStations}
                     onStartLocationChange={setStartLocation}
                     onEndLocationChange={setEndLocation}
                     onStartLocationSelect={handleStartLocationSelect}
@@ -344,45 +338,9 @@ const Index = () => {
                     onShowRestaurantsChange={handleShowRestaurantsChange}
                     onSearch={handleSearch}
                   />
-                  
-                  {evStations.length > 0 && (
-                    <div className="px-4 pb-4">
-                      <RouteJourney
-                        startLocation={startLocation}
-                        endLocation={endLocation}
-                        evStations={evStations}
-                        selectedEVModel={selectedModelObject}
-                        batteryPercentage={batteryPercentage}
-                      />
-                    </div>
-                  )}
                 </div>
               </SheetContent>
             </Sheet>
-            
-            {evStations.length > 0 && (
-              <Drawer>
-                <DrawerTrigger asChild>
-                  <Button 
-                    className="absolute bottom-4 left-4 z-10"
-                    size="sm"
-                  >
-                    View Journey Plan
-                  </Button>
-                </DrawerTrigger>
-                <DrawerContent className="max-h-[90vh]">
-                  <div className="p-4 max-h-[80vh] overflow-y-auto">
-                    <RouteJourney
-                      startLocation={startLocation}
-                      endLocation={endLocation}
-                      evStations={evStations}
-                      selectedEVModel={selectedModelObject}
-                      batteryPercentage={batteryPercentage}
-                    />
-                  </div>
-                </DrawerContent>
-              </Drawer>
-            )}
             
             {isLoading && (
               <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
@@ -409,7 +367,7 @@ const Index = () => {
             onCollapse={() => setIsSidebarVisible(false)}
             onExpand={() => setIsSidebarVisible(true)}
           >
-            <div className={`h-full transition-opacity overflow-y-auto ${isSidebarVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`h-full transition-opacity overflow-hidden ${isSidebarVisible ? 'opacity-100' : 'opacity-0'}`}>
               <Sidebar
                 startLocation={startLocation}
                 endLocation={endLocation}
@@ -421,6 +379,7 @@ const Index = () => {
                 isLoading={isLoading}
                 routeDistance={routeInfo?.distance}
                 routeDuration={routeInfo?.duration}
+                evStations={evStations}
                 onStartLocationChange={setStartLocation}
                 onEndLocationChange={setEndLocation}
                 onStartLocationSelect={handleStartLocationSelect}
@@ -432,128 +391,44 @@ const Index = () => {
                 onShowRestaurantsChange={handleShowRestaurantsChange}
                 onSearch={handleSearch}
               />
-              
-              {evStations.length > 0 && routeInfo && (
-                <div className="px-4 pb-4">
-                  <RouteJourney
-                    startLocation={startLocation}
-                    endLocation={endLocation}
-                    evStations={evStations}
-                    selectedEVModel={selectedModelObject}
-                    batteryPercentage={batteryPercentage}
-                  />
-                </div>
-              )}
             </div>
           </ResizablePanel>
           
           <ResizableHandle withHandle className="transition-opacity" />
           
           <ResizablePanel defaultSize={75} className="h-full">
-            {isJourneyVisible && evStations.length > 0 ? (
-              <ResizablePanelGroup direction="vertical">
-                <ResizablePanel defaultSize={70} minSize={50} className="relative">
-                  <div className="relative h-full w-full">
-                    <MapComponent
-                      startPoint={startCoords}
-                      endPoint={endCoords}
-                      routeGeometry={routeInfo?.geometry}
-                      evStations={evStations}
-                      hotels={showHotels ? hotels : []}
-                      restaurants={showRestaurants ? restaurants : []}
-                      onStationClick={handleStationClick}
-                      onPOIClick={handlePOIClick}
-                    />
-                    <MapLegend showPOI={showHotels || showRestaurants} />
-                    
-                    {!isSidebarVisible && (
-                      <Button 
-                        variant="secondary" 
-                        size="sm"
-                        className="absolute top-4 left-4 z-10"
-                        onClick={() => setIsSidebarVisible(true)}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    )}
-                    
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      className="absolute bottom-4 right-4 z-10"
-                      onClick={() => setIsJourneyVisible(!isJourneyVisible)}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                    
-                    {isLoading && (
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                        <div className="bg-white p-5 rounded-lg shadow flex items-center">
-                          <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
-                          <span className="text-lg">Loading...</span>
-                        </div>
-                      </div>
-                    )}
+            <div className="relative h-full w-full">
+              <MapComponent
+                startPoint={startCoords}
+                endPoint={endCoords}
+                routeGeometry={routeInfo?.geometry}
+                evStations={evStations}
+                hotels={showHotels ? hotels : []}
+                restaurants={showRestaurants ? restaurants : []}
+                onStationClick={handleStationClick}
+                onPOIClick={handlePOIClick}
+              />
+              
+              {!isSidebarVisible && (
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  className="absolute top-4 left-4 z-10"
+                  onClick={() => setIsSidebarVisible(true)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
+              
+              {isLoading && (
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                  <div className="bg-white p-5 rounded-lg shadow flex items-center">
+                    <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
+                    <span className="text-lg">Loading...</span>
                   </div>
-                </ResizablePanel>
-                
-                <ResizableHandle withHandle />
-                
-                <ResizablePanel defaultSize={30} className="bg-white p-4 overflow-auto">
-                  <RouteJourney
-                    startLocation={startLocation}
-                    endLocation={endLocation}
-                    evStations={evStations}
-                    selectedEVModel={selectedModelObject}
-                    batteryPercentage={batteryPercentage}
-                  />
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            ) : (
-              <div className="relative h-full w-full">
-                <MapComponent
-                  startPoint={startCoords}
-                  endPoint={endCoords}
-                  routeGeometry={routeInfo?.geometry}
-                  evStations={evStations}
-                  hotels={showHotels ? hotels : []}
-                  restaurants={showRestaurants ? restaurants : []}
-                  onStationClick={handleStationClick}
-                  onPOIClick={handlePOIClick}
-                />
-                <MapLegend showPOI={showHotels || showRestaurants} />
-                
-                {!isSidebarVisible && (
-                  <Button 
-                    variant="secondary" 
-                    size="sm"
-                    className="absolute top-4 left-4 z-10"
-                    onClick={() => setIsSidebarVisible(true)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                )}
-                
-                {evStations.length > 0 && !isJourneyVisible && (
-                  <Button 
-                    className="absolute bottom-4 right-4 z-10"
-                    size="sm"
-                    onClick={() => setIsJourneyVisible(true)}
-                  >
-                    View Journey Plan
-                  </Button>
-                )}
-                
-                {isLoading && (
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                    <div className="bg-white p-5 rounded-lg shadow flex items-center">
-                      <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" />
-                      <span className="text-lg">Loading...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
@@ -584,20 +459,5 @@ const Index = () => {
     </div>
   );
 };
-
-const ChevronDown = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
 
 export default Index;

@@ -29,6 +29,7 @@ export interface EVStation {
   isAvailable: boolean;
   isBusy: boolean;
   distanceFromRoute?: number; // distance from route in meters
+  distanceFromStart?: number; // distance from start point along route
 }
 
 // Interface for hotels and restaurants
@@ -151,19 +152,26 @@ export const findEVStationsAlongRoute = async (
     }
     
     // For a route, we'll query multiple points along the route to ensure coverage
-    // Start with a reasonable number of points (start, middle, end)
-    const searchPoints = [
-      coordinates[0], // Start
-      coordinates[Math.floor(coordinates.length / 2)], // Middle
-      coordinates[coordinates.length - 1] // End
-    ];
-
-    // Add more points for longer routes
-    if (coordinates.length > 20) {
-      // Add quarter point
-      searchPoints.splice(1, 0, coordinates[Math.floor(coordinates.length / 4)]);
-      // Add three-quarter point
-      searchPoints.splice(3, 0, coordinates[Math.floor(3 * coordinates.length / 4)]);
+    const searchPoints = [];
+    const totalPoints = coordinates.length;
+    
+    // Add points at regular intervals (every 10% of the route)
+    for (let i = 0; i < totalPoints; i += Math.max(1, Math.floor(totalPoints / 10))) {
+      searchPoints.push(coordinates[i]);
+    }
+    
+    // Ensure we have the start, middle and end points
+    if (!searchPoints.includes(coordinates[0])) {
+      searchPoints.unshift(coordinates[0]);
+    }
+    
+    const midIndex = Math.floor(totalPoints / 2);
+    if (!searchPoints.includes(coordinates[midIndex])) {
+      searchPoints.splice(Math.floor(searchPoints.length / 2), 0, coordinates[midIndex]);
+    }
+    
+    if (!searchPoints.includes(coordinates[totalPoints - 1])) {
+      searchPoints.push(coordinates[totalPoints - 1]);
     }
 
     // Create promises for all search points
@@ -185,20 +193,59 @@ export const findEVStationsAlongRoute = async (
           coordinates
         );
         
+        // Estimate distance from start along the route
+        const distanceFromStart = estimateDistanceAlongRoute(
+          [station.location[0], station.location[1]],
+          coordinates,
+          startPoint
+        );
+        
         stationsMap.set(station.id, {
           ...station,
-          distanceFromRoute: Math.round(distanceFromRoute * 1000) // Convert km to meters
+          distanceFromRoute: Math.round(distanceFromRoute * 1000), // Convert km to meters
+          distanceFromStart: Math.round(distanceFromStart * 1000) // Convert km to meters
         });
       }
     });
     
-    // Convert map back to array and sort by distance from route
+    // Convert map back to array and sort by distance from start
     const stations = Array.from(stationsMap.values());
-    return stations.sort((a, b) => (a.distanceFromRoute || 0) - (b.distanceFromRoute || 0));
+    return stations.sort((a, b) => (a.distanceFromStart || 0) - (b.distanceFromStart || 0));
   } catch (error) {
     console.error('Error finding EV stations:', error);
     return [];
   }
+};
+
+// Estimate the distance along the route for a given point
+const estimateDistanceAlongRoute = (
+  point: [number, number],
+  routeCoordinates: number[][],
+  startPoint: [number, number]
+): number => {
+  let closestPointIndex = 0;
+  let minDistance = Infinity;
+  
+  // Find the closest point on the route
+  for (let i = 0; i < routeCoordinates.length; i++) {
+    const coord = routeCoordinates[i];
+    const distance = calculateDistance(point, [coord[0], coord[1]]);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestPointIndex = i;
+    }
+  }
+  
+  // Calculate the distance from start to the closest point on the route
+  let distanceAlongRoute = 0;
+  for (let i = 0; i < closestPointIndex; i++) {
+    distanceAlongRoute += calculateDistance(
+      [routeCoordinates[i][0], routeCoordinates[i][1]],
+      [routeCoordinates[i+1][0], routeCoordinates[i+1][1]]
+    );
+  }
+  
+  return distanceAlongRoute;
 };
 
 // Helper function to fetch EV stations near a point using OpenChargeMap API
