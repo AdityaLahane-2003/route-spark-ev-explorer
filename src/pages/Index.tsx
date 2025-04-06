@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/Sidebar';
@@ -23,7 +22,7 @@ import {
   POI, 
   indianEVModels 
 } from '@/utils/api';
-import { Loader2, X, ChevronRight } from 'lucide-react';
+import { Loader2, X, ChevronRight, Search } from 'lucide-react';
 
 const Index = () => {
   const { toast } = useToast();
