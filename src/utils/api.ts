@@ -2,59 +2,54 @@ import axios from 'axios';
 
 const GEOAPIFY_API_KEY = "6a1c2b904e094e519db8c42f74e2e595";
 
-// Interface for location search results
+// Interfaces
 export interface LocationSuggestion {
   id: string;
   name: string;
   address: string;
-  coordinates: [number, number]; // [lng, lat]
+  coordinates: [number, number];
 }
 
-// Interface for route information
 export interface RouteInfo {
-  distance: number; // in meters
-  duration: number; // in seconds
-  geometry: any; // GeoJSON representing the route
+  distance: number;
+  duration: number;
+  geometry: any;
 }
 
-// Interface for EV station
 export interface EVStation {
   id: string;
   name: string;
-  location: [number, number]; // [lng, lat]
+  location: [number, number];
   address: string;
   connectors: Connector[];
   isAvailable: boolean;
   isBusy: boolean;
-  distanceFromRoute?: number; // distance from route in meters
-  distanceFromStart?: number; // distance from start point along route
+  distanceFromRoute?: number;
+  distanceFromStart?: number;
 }
 
-// Interface for hotels and restaurants
 export interface POI {
   id: string;
   name: string;
-  location: [number, number]; // [lng, lat]
+  location: [number, number];
   address: string;
   type: 'hotel' | 'restaurant';
   rating?: number;
-  distanceFromRoute?: number; // distance from route in meters
+  distanceFromRoute?: number;
 }
 
-// Interface for EV station connector
 export interface Connector {
   type: string;
-  power: number; // in kW
+  power: number;
   available: boolean;
 }
 
-// Indian EV car models with their battery capacities and ranges
 export interface EVModel {
   id: string;
   name: string;
-  batteryCapacity: number; // in kWh
-  range: number; // in km
-  chargingSpeed: number; // Average charging speed in kW
+  batteryCapacity: number;
+  range: number;
+  chargingSpeed: number;
 }
 
 export const indianEVModels: EVModel[] = [
@@ -72,6 +67,7 @@ export const indianEVModels: EVModel[] = [
   { id: 'jaguar-ipace', name: 'Jaguar I-PACE', batteryCapacity: 90, range: 470, chargingSpeed: 100 },
 ];
 
+// Location search
 export const searchLocations = async (query: string): Promise<LocationSuggestion[]> => {
   if (!query.trim()) return [];
   try {
@@ -94,6 +90,7 @@ export const searchLocations = async (query: string): Promise<LocationSuggestion
   }
 };
 
+// Get driving route
 export const getRoute = async (start: [number, number], end: [number, number]): Promise<RouteInfo | null> => {
   try {
     const response = await axios.get(`https://api.geoapify.com/v1/routing`, {
@@ -115,7 +112,13 @@ export const getRoute = async (start: [number, number], end: [number, number]): 
   }
 };
 
-export const findEVStationsAlongRoute = async (routeGeometry: any, radiusKm: number, startPoint: [number, number], endPoint: [number, number]): Promise<EVStation[]> => {
+// Fetch EV Stations along route
+export const findEVStationsAlongRoute = async (
+  routeGeometry: any,
+  radiusKm: number,
+  startPoint: [number, number],
+  endPoint: [number, number]
+): Promise<EVStation[]> => {
   try {
     const coordinates = routeGeometry.type === 'LineString' ? routeGeometry.coordinates : routeGeometry.coordinates[0];
     if (!coordinates || coordinates.length === 0) return [];
@@ -153,12 +156,17 @@ export const findEVStationsAlongRoute = async (routeGeometry: any, radiusKm: num
   }
 };
 
+// 🔧 FIXED: Correct coordinate order for circle filter
 const fetchEVStationsNearPoint = async (point: number[], radiusKm: number): Promise<EVStation[]> => {
   try {
+    const lat = point[1];
+    const lon = point[0];
+    const filter = `circle:${lat},${lon},${radiusKm * 1000}`;
+
     const response = await axios.get('https://api.geoapify.com/v2/places', {
       params: {
         categories: 'service.vehicle.charging',
-        filter: `circle:${point[0]},${point[1]},${radiusKm * 1000}`,
+        filter,
         limit: 50,
         apiKey: GEOAPIFY_API_KEY
       }
@@ -183,17 +191,23 @@ const fetchEVStationsNearPoint = async (point: number[], radiusKm: number): Prom
   }
 };
 
-export const findPOIsAlongRoute = async (routeGeometry: any, radiusKm: number, poiType: 'hotel' | 'restaurant'): Promise<POI[]> => {
+// POI finder
+export const findPOIsAlongRoute = async (
+  routeGeometry: any,
+  radiusKm: number,
+  poiType: 'hotel' | 'restaurant'
+): Promise<POI[]> => {
   try {
     const coordinates = routeGeometry.type === 'LineString' ? routeGeometry.coordinates : routeGeometry.coordinates[0];
     if (!coordinates || coordinates.length === 0) return [];
     const midIndex = Math.floor(coordinates.length / 2);
     const midPoint = coordinates[midIndex];
     const category = poiType === 'hotel' ? 'accommodation.hotel' : 'catering.restaurant';
+
     const response = await axios.get('https://api.geoapify.com/v2/places', {
       params: {
         categories: category,
-        filter: `circle:${midPoint[0]},${midPoint[1]},${radiusKm * 1000}`,
+        filter: `circle:${midPoint[1]},${midPoint[0]},${radiusKm * 1000}`,
         limit: 10,
         apiKey: GEOAPIFY_API_KEY
       }
@@ -219,6 +233,7 @@ export const findPOIsAlongRoute = async (routeGeometry: any, radiusKm: number, p
   }
 };
 
+// Distance helpers
 const estimateDistanceAlongRoute = (point: [number, number], routeCoordinates: number[][], startPoint: [number, number]): number => {
   let closestPointIndex = 0;
   let minDistance = Infinity;
@@ -263,7 +278,12 @@ export const calculateDistance = (point1: [number, number], point2: [number, num
   return R * c;
 };
 
-export const calculateChargingTime = (batteryCapacity: number, currentPercentage: number, targetPercentage: number, chargingPower: number): number => {
+export const calculateChargingTime = (
+  batteryCapacity: number,
+  currentPercentage: number,
+  targetPercentage: number,
+  chargingPower: number
+): number => {
   const energyNeeded = batteryCapacity * (targetPercentage - currentPercentage) / 100;
   const hoursNeeded = energyNeeded / chargingPower;
   return Math.round(hoursNeeded * 60);
