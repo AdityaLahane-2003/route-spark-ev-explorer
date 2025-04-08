@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import axios from 'axios';
 
@@ -148,6 +149,7 @@ export const findEVStationsAlongRoute = async (
       : routeGeometry.coordinates[0];
     
     if (!coordinates || coordinates.length === 0) {
+      console.log('No coordinates found in route geometry');
       return [];
     }
     
@@ -156,7 +158,7 @@ export const findEVStationsAlongRoute = async (
     const totalPoints = coordinates.length;
     
     // Add points at regular intervals (every 10% of the route)
-    for (let i = 0; i < totalPoints; i += Math.max(1, Math.floor(totalPoints / 10))) {
+    for (let i = 0; i < totalPoints; i += Math.max(1, Math.floor(totalPoints / 5))) {
       searchPoints.push(coordinates[i]);
     }
     
@@ -261,7 +263,7 @@ const fetchEVStationsNearPoint = async (
         longitude: point[0],
         distance: radiusKm,
         distanceunit: 'km',
-        maxresults: 50,
+        maxresults: 100,
         compact: true,
         verbose: false,
         key: OPEN_CHARGE_MAP_API_KEY
